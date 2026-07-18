@@ -1,0 +1,3 @@
+# Optional training/runtime dependency for LSTM, Transformer and GNN engines.
+# Install explicitly when trained deep-learning model artifacts are available.
+torch

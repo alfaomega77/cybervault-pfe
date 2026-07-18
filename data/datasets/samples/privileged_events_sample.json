@@ -1,0 +1,30 @@
+[
+  {
+    "event_id": "sample-1",
+    "event_type": "command.ingested",
+    "session_id": "session-demo-1",
+    "user_id": "admin-1",
+    "account": "root",
+    "protocol": "ssh",
+    "remote_addr": "10.0.0.50",
+    "payload": {"input": "whoami", "timestamp": 1751796000.0}
+  },
+  {
+    "event_id": "sample-2",
+    "event_type": "command.ingested",
+    "session_id": "session-demo-1",
+    "user_id": "admin-1",
+    "account": "root",
+    "protocol": "ssh",
+    "remote_addr": "10.0.0.50",
+    "payload": {"input": "rm -rf /var/log/*", "timestamp": 1751796100.0}
+  },
+  {
+    "event_id": "sample-3",
+    "event_type": "login.success",
+    "session_id": "",
+    "user_id": "admin-2",
+    "remote_addr": "203.0.113.99",
+    "payload": {"username": "admin-2"}
+  }
+]

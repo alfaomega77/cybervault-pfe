@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Tableau de bord CyberVault — décisions IA sur les accès privilégiés">
+  <title>Décisions — CyberVault</title>
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
+  <link rel="stylesheet" href="/static/css/app.css?v=20260718">
+</head>
+<body data-page="app">
+  <a class="skip-link" href="#main-content">Aller au contenu</a>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
+  <div class="app-shell">
+    <aside class="app-sidebar" id="app-sidebar" aria-label="Navigation">
+      <a class="brand" href="/">
+        <div class="brand-badge" aria-hidden="true">CV</div>
+        <span>CyberVault</span>
+      </a>
+      <nav class="side-nav">
+        <a href="/analyze.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Mon espace
+        </a>
+        <a href="/integrate.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Mon PAM
+        </a>
+        <a href="/app.html" class="active" aria-current="page">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Décisions
+        </a>
+      </nav>
+      <div class="side-footer">
+        <div class="user-chip">
+          <div class="avatar" aria-hidden="true">SO</div>
+          <div>
+            <div style="font-weight:600;color:var(--text);font-size:0.85rem;">SOC Analyst</div>
+            <div id="user-greeting" style="font-size:0.75rem;color:var(--muted);"></div>
+          </div>
+        </div>
+        <a href="#" id="btn-logout" class="btn btn-secondary" style="width:100%;min-height:38px;font-size:0.85rem;">Déconnexion</a>
+      </div>
+    </aside>
+
+    <div class="app-main-wrap">
+      <div class="app-topbar">
+        <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Ouvrir le menu" aria-controls="app-sidebar" aria-expanded="false">☰</button>
+        <strong>Décisions</strong>
+        <span class="status-pill status-ok" id="service-status-mobile">…</span>
+      </div>
+
+      <main class="app-main" id="main-content">
+        <header class="page-header">
+          <div>
+            <div class="page-kicker" id="page-kicker"><span class="live-dot hidden" id="live-kicker-dot" aria-hidden="true"></span> Journal des décisions</div>
+            <h1>Décisions de sécurité</h1>
+            <p class="lead">Toutes les décisions IA : analyses de fichiers <strong>et</strong> flux JumpServer live (quand branché).</p>
+          </div>
+          <div class="header-actions">
+            <span class="status-pill status-ok" id="service-status">Service…</span>
+            <span class="status-pill status-warn" id="mode-status">Mode…</span>
+          </div>
+        </header>
+
+        <div id="integration-bar" class="integration-bar card">
+          <div><span class="label">PAM</span><span class="value" id="int-pam">—</span></div>
+          <div><span class="label">Mode live</span><span class="value" id="int-mode">—</span></div>
+          <div><span class="label">Dernière activité</span><span class="value" id="int-last">—</span></div>
+        </div>
+
+        <div id="pam-live-banner" class="alert-box success hidden" role="status">
+          <span id="pam-live-text">● Surveillance temps réel active</span>
+          <button class="btn btn-secondary" id="btn-stop-pam" type="button" style="margin-left:auto;min-height:34px;padding:0.35rem 0.85rem;font-size:0.85rem;">Arrêter</button>
+        </div>
+
+        <div id="onboarding-banner" class="alert-box info hidden" role="status">
+          Connectez CyberVault à votre JumpServer pour voir les décisions en direct.
+          <a href="/integrate.html"><strong>Connecter mon PAM →</strong></a>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card card">
+            <div class="stat-label">Analyses enregistrées</div>
+            <div class="stat-value" id="stat-total" data-animate-count>0</div>
+            <div class="stat-hint" id="stat-total-hint">dont événements uniques : —</div>
+          </div>
+          <div class="stat-card card">
+            <div class="stat-label">Alertes (24h)</div>
+            <div class="stat-value" id="stat-alerts" data-animate-count>0</div>
+          </div>
+          <div class="stat-card card">
+            <div class="stat-label">Risque élevé</div>
+            <div class="stat-value" id="stat-high" data-animate-count>0</div>
+          </div>
+          <div class="stat-card card">
+            <div class="stat-label">Dernière activité</div>
+            <div class="stat-value" id="stat-last" style="font-size:1rem;">—</div>
+          </div>
+        </div>
+
+        <section class="panel-card" aria-labelledby="decisions-heading">
+          <div class="page-header" style="margin-bottom:0.85rem;">
+            <div>
+              <h2 id="decisions-heading" class="section-title" style="margin:0;">Décisions de sécurité</h2>
+              <p class="section-sub" id="decisions-subtitle" style="margin:0.35rem 0 0;">Cliquez sur une ligne pour voir le détail complet</p>
+            </div>
+          </div>
+
+          <div class="toolbar-row">
+            <input type="search" class="search-input" id="search-input" placeholder="Rechercher utilisateur, IP, asset…" autocomplete="off" aria-label="Rechercher dans les décisions">
+            <button class="btn btn-secondary filter-chip" id="btn-filter-all" type="button">Tout</button>
+            <button class="btn btn-secondary filter-chip" id="btn-filter-alerts" type="button">Alertes</button>
+            <button class="btn btn-secondary" id="btn-load-more" type="button">Voir plus</button>
+            <button class="btn btn-secondary" id="btn-export-csv" type="button">Exporter CSV</button>
+            <button class="btn btn-secondary" id="btn-clear-history" type="button" style="color:#fca5a5;border-color:rgba(239,68,68,0.35);">Supprimer l’historique</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Heure</th>
+                  <th>Utilisateur</th>
+                  <th>IP source</th>
+                  <th>Asset</th>
+                  <th>Compte</th>
+                  <th>Type</th>
+                  <th>Risque</th>
+                  <th>Action</th>
+                  <th>Raison principale</th>
+                </tr>
+              </thead>
+              <tbody id="decisions-body" aria-live="polite">
+                <tr>
+                  <td colspan="9" class="empty-state">
+                    <div class="skeleton" style="height:14px;width:40%;margin:0 auto 0.6rem;"></div>
+                    <div class="skeleton" style="height:14px;width:70%;margin:0 auto;"></div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="refresh-row">
+            <span>Actualisation automatique lorsque le service est joignable.</span>
+            <button class="btn btn-secondary" id="btn-refresh" type="button">Rafraîchir</button>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div id="detail-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+    <div class="modal-backdrop" id="detail-backdrop"></div>
+    <div class="modal-panel">
+      <button class="modal-close" id="detail-close" type="button" aria-label="Fermer">×</button>
+      <div id="detail-content"></div>
+    </div>
+  </div>
+
+  <script src="/static/js/auth.js?v=20260718"></script>
+  <script src="/static/js/common.js?v=20260718"></script>
+  <script src="/static/js/dashboard.js?v=20260718c"></script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connexion — CyberVault</title>
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
+  <link rel="stylesheet" href="/static/css/auth.css?v=20260718">
+</head>
+<body class="auth-page">
+  <a class="skip-link" href="#login-form">Aller au formulaire</a>
+  <div class="auth-split">
+    <aside class="auth-side" aria-hidden="true">
+      <div class="auth-logo">CyberVault</div>
+      <h1>Votre centre de risque PAM</h1>
+      <ul class="auth-benefits">
+        <li>Décisions IA en temps réel sur les sessions privilégiées</li>
+        <li>Scores de risque et explications pour le SOC</li>
+        <li>Intégration JumpServer guidée</li>
+        <li>Mode test (dry-run) par défaut</li>
+      </ul>
+    </aside>
+
+    <main class="auth-form-side">
+      <div class="auth-form-wrap">
+        <a class="auth-back" href="/">← Retour à l’accueil</a>
+        <h2>Connexion</h2>
+        <p class="auth-sub">Accédez à votre espace CyberVault</p>
+        <div class="auth-error" id="login-error" role="alert"></div>
+        <form id="login-form">
+          <div class="auth-field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" autocomplete="email" required>
+          </div>
+          <div class="auth-field">
+            <label for="password">Mot de passe</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" required>
+            <div class="auth-field-extra">
+              <a class="forgot-link" href="/forgot-password.html">Mot de passe oublié ?</a>
+            </div>
+          </div>
+          <button class="auth-btn" type="submit" id="login-btn">Se connecter</button>
+        </form>
+        <p class="auth-footer-link">
+          Pas encore de compte ? <a href="/signup.html">Créer un compte</a>
+        </p>
+      </div>
+    </main>
+  </div>
+  <script src="/static/js/auth.js?v=20260718"></script>
+  <script>
+    if (new URLSearchParams(window.location.search).get('expired')) {
+      showAuthError('login-error', 'Votre session a expiré. Reconnectez-vous.');
+    }
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAuthError('login-error');
+      const btn = document.getElementById('login-btn');
+      btn.disabled = true;
+      const fd = new FormData(e.target);
+      try {
+        await Auth.login(fd.get('email'), fd.get('password'));
+        window.location.href = '/analyze.html';
+      } catch (err) {
+        showAuthError('login-error', err.message);
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

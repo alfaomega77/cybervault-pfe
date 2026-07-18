@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CyberVault POC — EC2 host for JumpServer + AI Security (real-time)
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Existing EC2 key pair for SSH
+  AllowedCidr:
+    Type: String
+    Description: CIDR allowed to reach SSH/HTTP/AISS (use your IP/32)
+    Default: 0.0.0.0/0
+  InstanceType:
+    Type: String
+    Default: t3.xlarge
+    AllowedValues: [t3.large, t3.xlarge, t3.2xlarge, m5.large, m5.xlarge]
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: Prefer Ubuntu — override AMI if needed (see README)
+
+Conditions:
+  UseDefaultAmi: !Equals [!Ref LatestAmiId, /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64]
+
+Resources:
+  CyberVaultVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: cybervault-poc-vpc
+
+  CyberVaultIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: cybervault-poc-igw
+
+  AttachIGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref CyberVaultVPC
+      InternetGatewayId: !Ref CyberVaultIGW
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CyberVaultVPC
+      CidrBlock: 10.42.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: cybervault-poc-public
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CyberVaultVPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachIGW
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref CyberVaultIGW
+
+  SubnetRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  InstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: CyberVault POC — JumpServer + AISS
+      VpcId: !Ref CyberVaultVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedCidr
+          Description: SSH
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedCidr
+          Description: JumpServer HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AllowedCidr
+          Description: JumpServer HTTPS
+        - IpProtocol: tcp
+          FromPort: 2222
+          ToPort: 2222
+          CidrIp: !Ref AllowedCidr
+          Description: KoKo SSH proxy
+        - IpProtocol: tcp
+          FromPort: 8090
+          ToPort: 8090
+          CidrIp: !Ref AllowedCidr
+          Description: CyberVault dashboard / ingest
+      Tags:
+        - Key: Name
+          Value: cybervault-poc-sg
+
+  # Ubuntu 22.04 — map by region via SSM public param when possible
+  UbuntuAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+
+  CyberVaultInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      ImageId: !Ref UbuntuAmi
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref InstanceSG
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 40
+            VolumeType: gp3
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -eux
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -y
+          apt-get install -y curl git unzip ca-certificates
+          curl -fsSL https://get.docker.com | sh
+          usermod -aG docker ubuntu
+          systemctl enable --now docker
+          mkdir -p /opt/cybervault
+          echo "CyberVault EC2 bootstrap OK $(date -Is)" > /opt/cybervault/bootstrap.log
+      Tags:
+        - Key: Name
+          Value: cybervault-poc
+        - Key: Project
+          Value: CyberVault
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachIGW
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref CyberVaultInstance
+      Tags:
+        - Key: Name
+          Value: cybervault-poc-eip
+
+Outputs:
+  PublicIP:
+    Description: Elastic IP of the POC instance
+    Value: !Ref ElasticIP
+  SSHCommand:
+    Description: SSH as ubuntu
+    Value: !Sub 'ssh -i YOUR_KEY.pem ubuntu@${ElasticIP}'
+  JumpServerURL:
+    Value: !Sub 'http://${ElasticIP}'
+  DashboardURL:
+    Description: CyberVault UI (after run-poc.sh)
+    Value: !Sub 'http://${ElasticIP}:8090'
+  SecurityGroupId:
+    Value: !Ref InstanceSG

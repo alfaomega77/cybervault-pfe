@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Connectez JumpServer à CyberVault">
+  <title>Mon PAM — CyberVault</title>
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
+  <link rel="stylesheet" href="/static/css/auth.css?v=20260718">
+</head>
+<body class="integrate-page" data-page="integrate">
+  <a class="skip-link" href="#main-content">Aller au contenu</a>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
+  <div class="app-shell">
+    <aside class="app-sidebar" id="app-sidebar" aria-label="Navigation">
+      <a class="brand" href="/">
+        <div class="brand-badge" aria-hidden="true">CV</div>
+        <span>CyberVault</span>
+      </a>
+      <nav class="side-nav">
+        <a href="/analyze.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Mon espace
+        </a>
+        <a href="/integrate.html" class="active" aria-current="page">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Mon PAM
+        </a>
+        <a href="/app.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Décisions
+        </a>
+      </nav>
+      <div class="side-footer">
+        <div class="user-chip">
+          <div class="avatar" aria-hidden="true">AD</div>
+          <div>
+            <div style="font-weight:600;color:var(--text);font-size:0.85rem;">Admin</div>
+            <div id="user-greeting" style="font-size:0.75rem;color:var(--muted);"></div>
+          </div>
+        </div>
+        <a href="#" id="btn-logout" class="btn btn-secondary" style="width:100%;min-height:38px;font-size:0.85rem;">Déconnexion</a>
+      </div>
+    </aside>
+
+    <div class="app-main-wrap">
+      <div class="app-topbar">
+        <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Ouvrir le menu" aria-controls="app-sidebar" aria-expanded="false">☰</button>
+        <strong>Mon PAM</strong>
+      </div>
+
+      <main class="app-main" id="main-content">
+        <section class="connect-simple card" id="view-main">
+          <div class="connect-icon" id="status-icon" aria-hidden="true">CV</div>
+          <h1>Mon PAM</h1>
+          <p class="connect-lead" id="status-lead">Connectez JumpServer à CyberVault en un clic.</p>
+          <p id="status-line" class="hidden" style="font-size:0.9rem;margin:0.5rem 0 1rem;text-align:center;"></p>
+
+          <form id="integrate-form" class="connect-form">
+            <details class="connect-optional">
+              <summary>Options JumpServer (optionnel)</summary>
+              <div class="auth-field" style="margin-top:0.75rem;">
+                <label for="jumpserver_url">URL JumpServer</label>
+                <input type="url" id="jumpserver_url" placeholder="http://localhost" value="http://localhost">
+              </div>
+              <div class="auth-field">
+                <label for="jumpserver_token">Token API</label>
+                <input type="password" id="jumpserver_token" placeholder="Pour couper les sessions (production)" autocomplete="off">
+              </div>
+            </details>
+            <button class="connect-btn" type="submit" id="btn-integrate">Intégrer avec mon PAM →</button>
+          </form>
+
+          <div class="setup-step" id="section-alerts">
+            <h3>Alertes admin</h3>
+            <p style="font-size:0.88rem;color:var(--muted);margin:0 0 0.75rem;">
+              Recevez par email les alertes temps réel, avertissements et détections d’anomalies.
+            </p>
+            <form id="alerts-form" class="connect-form">
+              <div class="auth-field">
+                <label for="alert_email">Email admin</label>
+                <input type="email" id="alert_email" placeholder="admin@entreprise.com" required>
+              </div>
+              <div class="auth-field">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="notify_email" checked>
+                  Alertes par email
+                </label>
+              </div>
+              <div class="btn-row">
+                <button class="btn-outline" type="submit" id="btn-save-alerts">Enregistrer</button>
+                <button class="btn-outline" type="button" id="btn-test-alert">Tester l’alerte</button>
+              </div>
+              <p id="alerts-status" style="font-size:0.85rem;color:var(--muted);margin-top:0.5rem;" aria-live="polite"></p>
+            </form>
+          </div>
+
+          <div class="btn-row" style="justify-content:center;margin-top:1.25rem;">
+            <a class="btn-green" href="/app.html">Voir les décisions →</a>
+            <button class="btn-outline hidden" type="button" id="btn-stop-pam">Arrêter la surveillance</button>
+          </div>
+        </section>
+
+        <section class="connect-simple card connect-progress hidden" id="view-progress">
+          <div class="connect-spinner" aria-hidden="true"></div>
+          <h1>Intégration en cours…</h1>
+          <p class="connect-lead">Configuration du webhook et vérification de la connexion.</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/js/auth.js?v=20260718"></script>
+  <script src="/static/js/common.js?v=20260718"></script>
+  <script src="/static/js/integrate.js?v=20260718"></script>
+</body>
+</html>

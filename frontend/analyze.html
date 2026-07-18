@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Analysez vos logs PAM avec CyberVault">
+  <title>Mon espace — CyberVault</title>
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
+  <link rel="stylesheet" href="/static/css/auth.css?v=20260718">
+</head>
+<body class="integrate-page" data-page="analyze">
+  <a class="skip-link" href="#main-content">Aller au contenu</a>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
+  <div class="app-shell">
+    <aside class="app-sidebar" id="app-sidebar" aria-label="Navigation">
+      <a class="brand" href="/">
+        <div class="brand-badge" aria-hidden="true">CV</div>
+        <span>CyberVault</span>
+      </a>
+      <nav class="side-nav">
+        <a href="/analyze.html" class="active" aria-current="page">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Mon espace
+        </a>
+        <a href="/integrate.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Mon PAM
+        </a>
+        <a href="/app.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Décisions
+        </a>
+      </nav>
+      <div class="side-footer">
+        <a href="#" id="btn-logout" class="btn btn-secondary" style="width:100%;min-height:38px;font-size:0.85rem;">Déconnexion</a>
+      </div>
+    </aside>
+
+    <div class="app-main-wrap">
+      <div class="app-topbar">
+        <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Ouvrir le menu" aria-controls="app-sidebar" aria-expanded="false">☰</button>
+        <strong>Mon espace</strong>
+      </div>
+
+      <main class="app-main" id="main-content">
+
+        <!-- Step 1: choose mode -->
+        <section class="connect-simple card" id="view-choice">
+          <div class="connect-icon" aria-hidden="true">CV</div>
+          <h1>Comment voulez-vous démarrer ?</h1>
+          <p class="connect-lead">Choisissez un mode. Le reste s’affiche ensuite.</p>
+
+          <div class="choice-grid choice-grid-3">
+            <button type="button" class="choice-card" id="btn-choose-simulate">
+              <span class="choice-tag live">Recommandé</span>
+              <strong>Simuler le temps réel</strong>
+              <span>3 sessions live (IA + décisions + email si SMTP). Idéal pour tester sans JumpServer.</span>
+            </button>
+            <button type="button" class="choice-card" id="btn-choose-batch">
+              <span class="choice-tag">Batch</span>
+              <strong>Analyser un fichier</strong>
+              <span>Importer un JSON / JSONL et obtenir des décisions IA.</span>
+            </button>
+            <button type="button" class="choice-card" id="btn-choose-live">
+              <span class="choice-tag">PAM</span>
+              <strong>Connecter JumpServer</strong>
+              <span>Vrai flux bastion (lab / AWS). Configuration Mon PAM.</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Live simulation (no JumpServer required) -->
+        <section class="connect-simple card hidden" id="view-simulate">
+          <button type="button" class="step-back" id="btn-back-from-sim">← Changer de mode</button>
+          <div class="connect-icon" aria-hidden="true">RT</div>
+          <h1>Simulation temps réel</h1>
+          <p class="connect-lead">
+            CyberVault rejoue 3 sessions privilégiées comme si JumpServer envoyait des événements live :
+            normale → sensible → destructrice.
+          </p>
+          <div class="auth-field">
+            <label for="sim-alert-email">Email pour recevoir l’alerte (session à risque)</label>
+            <input type="email" id="sim-alert-email" placeholder="vous@entreprise.com">
+            <small class="field-hint">SMTP doit être configuré sur le serveur (AISS_SMTP_*). Sinon la décision s’affiche quand même.</small>
+          </div>
+          <button class="connect-btn" type="button" id="btn-run-simulation">Lancer la simulation →</button>
+          <div class="auth-error" id="sim-error" role="alert"></div>
+          <div id="sim-results" class="hidden" style="margin-top:1.25rem;"></div>
+          <div class="integrate-actions hidden" id="sim-actions" style="margin-top:1rem;">
+            <a class="btn-green" href="/app.html">Voir dans Décisions →</a>
+            <button type="button" class="btn-outline" id="btn-sim-again">Relancer</button>
+          </div>
+        </section>
+
+        <!-- Step 2a: batch upload (hidden until chosen) -->
+        <section class="connect-simple card hidden" id="view-upload">
+          <button type="button" class="step-back" id="btn-back-choice">← Changer de mode</button>
+          <div class="connect-icon" aria-hidden="true">AI</div>
+          <h1>Analyse batch</h1>
+          <p class="connect-lead">Importez un fichier de logs privilégiés.</p>
+
+          <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Choisir un fichier JSON ou JSONL à analyser">
+            <input type="file" id="file-input" accept=".jsonl,.json,.txt" hidden>
+            <p><strong>Glissez votre fichier ici</strong> ou</p>
+            <button type="button" class="btn-outline" id="btn-pick-file">Choisir un fichier .json ou .jsonl</button>
+            <p class="drop-hint" id="file-name">Formats : tableau JSON <code>[...]</code> ou JSONL (une ligne par événement)</p>
+          </div>
+
+          <details class="connect-optional">
+            <summary>Quel format de fichier ?</summary>
+            <pre class="code-block" style="margin-top:0.75rem;font-size:0.78rem;overflow:auto;">{"event_id": "...", "event_type": "command.ingested", "session_id": "...", "payload": {"input": "rm -rf /tmp"}}</pre>
+            <p style="font-size:0.85rem;color:var(--muted);margin:0.5rem 0 0;">
+              Formats acceptés : <strong>.json</strong> (tableau) ou <strong>.jsonl</strong> (une ligne par événement).
+            </p>
+          </details>
+
+          <button class="connect-btn" type="button" id="btn-analyze" disabled>Analyser le fichier →</button>
+          <div class="auth-error" id="analyze-error" role="alert"></div>
+        </section>
+
+        <!-- Step 3: results -->
+        <section class="connect-simple card hidden" id="view-results">
+          <div style="text-align:center;">
+            <div class="connect-icon ok" aria-hidden="true">✓</div>
+            <h1>Analyse terminée</h1>
+            <p class="connect-lead" id="results-summary">—</p>
+          </div>
+          <div class="results-stats" id="results-stats"></div>
+          <div class="integrate-actions">
+            <a class="btn-green" href="/app.html">Voir les décisions →</a>
+            <button type="button" class="btn-outline" id="btn-analyze-another">Analyser un autre fichier</button>
+            <button type="button" class="btn-secondary" id="btn-back-home">Changer de mode</button>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/js/auth.js?v=20260718"></script>
+  <script src="/static/js/common.js?v=20260718"></script>
+  <script src="/static/js/analyze.js?v=20260718"></script>
+</body>
+</html>

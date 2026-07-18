@@ -1,0 +1,7 @@
+# Mini LANL-style auth sample (time,src_user,dst_user,src_comp,dst_comp,auth_type,logon_type,orientation,success)
+1,U1@DOM,U1@DOM,C1,C1,Kerberos,Network,LogOn,Success
+2,U1@DOM,U1@DOM,C1,C2,Kerberos,Network,LogOn,Success
+3,U99@DOM,U99@DOM,C9,C9,NTLM,Network,LogOn,Fail
+4,U99@DOM,U99@DOM,C9,C10,NTLM,Network,LogOn,Fail
+5,U2@DOM,U2@DOM,C2,C2,Kerberos,Network,LogOn,Success
+6,U99@DOM,U99@DOM,C9,C11,NTLM,Network,LogOn,Success

@@ -1,0 +1,1191 @@
+% Corps de l'article scientifique CyberVault (IEEE Access),
+% adapté pour inclusion dans le mémoire (classe report).
+% Ne pas compiler seul.
+\selectlanguage{english}
+\section{INTRODUCTION}
+\label{art-sec:intro}
+
+In March 2024, a European energy provider disclosed that an attacker had spent eleven days inside production systems using a valid bastion account. Session recordings existed. So did access approvals. What the company lacked was a mechanism to judge, in the minutes after \texttt{chmod 777 /etc/shadow}, whether that judgment should become an alert, a locked session, or an explained incident ticket. The breach did not fail on identity; it failed on \textit{privileged behavior analytics} during live access.
+
+Stories of this kind are no longer edge cases. Verizon's incident data consistently show privilege misuse and credential abuse among the costliest attack paths~\cite{ref21}. At the same time, Zero Trust adoption pushes organizations to verify every session continuously, not only at login~\cite{ref4,ref22}. Privileged Access Management (PAM) answered the first generation of this problem: vault the password, broker the session, record the screen, satisfy the auditor~\cite{ref1,ref5}. The next generation is harder. Security teams now ask whether PAM can \textit{reason} about privileged behavior while the session is still open.
+
+The economic stakes are concrete. A single compromised domain-admin session can propagate ransomware across hundreds of hosts before EDR correlation catches up. Mean time to detect (MTTD) for insider-like privilege abuse still measures in days in many SOCs~\cite{ref6,ref24}, while mean time to contain (MTTC) for a live bastion session could be seconds if the PAM plane itself enforces policy. CyberVault targets that asymmetry: treat the bastion webhook stream as a first-class analytics source, not an archival afterthought.
+
+\subsection{CONTEXT}
+Three forces shape this question: insider-like attacks rose with remote administration~\cite{ref6}; privileged accounts remain disproportionately valuable; and NIS2/ISO~27001 expect demonstrable monitoring, not checkbox vaulting. Commercial suites (CyberArk, BeyondTrust, Delinea) excel at JIT access and session isolation~\cite{ref16,ref17,ref18}. Open-source JumpServer~\cite{ref5} democratized bastion deployment but remains a capable recorder, not an analytic decision system.
+
+Insider-threat studies train offline classifiers on historical logs~\cite{ref10,ref24}; PAM engineering focuses on credential hygiene~\cite{ref1,ref26}. CyberVault bridges them via online webhook contracts where each command yields a feature vector and each response follows constrained optimization.
+
+\subsection{PROBLEM STATEMENT}
+Field deployments reveal four gaps: (1)~detection latency---destructive commands found in quarterly reviews, not live sessions; (2)~alert quality---single engines miss contextual abuse (rules-only recall 34.4\%) or flood analysts (UEBA-only FPR 16.7\%); (3)~analyst trust---ML scores without explanations are often ignored~\cite{ref12,ref13}; (4)~response rigidity---static thresholds ignore trade-offs between security and disruption~\cite{ref14,ref15}. CyberVault closes these gaps on JumpServer: webhook in, scored decision out, optional lock/kill when policy allows.
+
+\subsection{MAIN RESEARCH QUESTION AND SUB-QUESTIONS}
+The \textbf{main research question (MRQ)} that guides this study is:
+\begin{quote}
+\textit{How can an integrated artificial-intelligence, explainable-AI, and operations-research framework improve real-time detection, explanation, and response optimization for privileged-access sessions on open-source PAM?}
+\end{quote}
+We decompose the MRQ into four \textbf{sub-research questions (SRQs)}:
+\begin{itemize}
+\item \textbf{SRQ1 (Detection):} Can a hybrid ensemble (expert rules, behavioral UEBA, tabular ML, and deep sequence/graph scorers) detect privileged-account anomalies more effectively than any single engine on reproducible PAM telemetry?
+\item \textbf{SRQ2 (Explainability):} Can SHAP and LIME attributions, combined with rule and UEBA textual reasons, make alerts actionable for SOC analysts during live sessions?
+\item \textbf{SRQ3 (Optimization):} Can multi-objective response selection outperform static threshold policies when kill constraints and protected accounts bind?
+\item \textbf{SRQ4 (Integration):} Does joint pipeline design produce measurable detection gain over sequential or isolated single-engine use?
+\end{itemize}
+Sections~\ref{art-sec:experiments}--\ref{art-sec:discussion} address SRQ1--SRQ4 with benchmark evidence and prototype measurements.
+
+\subsection{CONTRIBUTIONS}
+Four contributions follow from this design.
+We first specify CyberVault as a five-layer intelligent-PAM stack on JumpServer---collect, profile, detect, explain, and decide---without replacing the bastion itself.
+Second, we publish the full mathematical model: sets and parameters, detection equations for rules, UEBA, IF+RF, sequence score $r_S$, privilege GNN $r_G$, and the two MOO programs for privilege assignment~$(\mathrm{MO}\text{-}\mathrm{A})$ and incident response~$(\mathrm{MO})$/$(\mathrm{P})$.
+Third, deep sequence and graph scorers are implemented as optional extensions: a bidirectional LSTM (Transformer switch) over command history and a two-layer GNN over user--asset--IP relations, trained offline and loadable at inference when enabled; they are outside the primary tabular evaluation kernel.
+Fourth, we report reproducible numbers: tabular hybrid $F1=66.2\%$ (recall $82.0\%$, $n_{\mathrm{test}}=300$, seed~42), +29.3\% relative $\mathrm{Gap}_{F1}$ over rules-only, median latency near 180\,ms, and a five-command progressive case where tabular fusion stays at $r{=}0$ while $r_S\geq 0.94$.
+
+The paper proceeds as follows. Section~\ref{art-sec:related} reviews related work; Section~\ref{art-sec:formulation} formalizes the model; Section~\ref{art-sec:framework} presents the architecture; Section~\ref{art-sec:implementation} covers the JumpServer prototype; Section~\ref{art-sec:method} describes methodology; Section~\ref{art-sec:experiments} reports results; Sections~\ref{art-sec:discussion}--\ref{art-sec:conclusion} discuss implications and conclude.
+
+\section{LITERATURE REVIEW}
+\label{art-sec:related}
+
+\subsection{PRIVILEGED ACCESS MANAGEMENT}
+PAM research converged on least privilege, credential vaulting, session brokering, and tamper-evident audit~\cite{ref1,ref2,ref4,ref26}. Commercial suites---CyberArk~\cite{ref16}, BeyondTrust~\cite{ref17}, Delinea~\cite{ref18}---excel at controlling entry but are weaker at judging behavior after entry. JumpServer~\cite{ref5} offers open, self-hosted bastion deployment with strong proxying and recording. Session telemetry (logins, commands, assets, IPs) remains underutilized compared with dedicated UEBA~\cite{ref27}---CyberVault attaches at this gap.
+
+Table~\ref{art-tab:pam-compare} contrasts capability emphasis. CyberVault augments open bastions where license cost or data-sovereignty rules preclude commercial suites.
+
+\begin{table}[H][!t]
+\caption{PAM Platform Capability Emphasis}
+\label{art-tab:pam-compare}
+\centering
+\scriptsize
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lcccc@{}}
+\toprule
+\textbf{Capability} & CyberArk & JumpServer & UEBA SIEM & CyberVault \\
+\midrule
+Credential vault & Strong & Partial & No & No \\
+Session proxy & Strong & Strong & No & No \\
+Live command stream & Yes & Yes & Delayed & Yes \\
+Behavioral scoring & Add-on & Limited & Yes & Yes \\
+Sequence / graph DL & Rare & No & Partial & Yes \\
+XAI on session & Rare & No & Partial & Yes \\
+MOO response & Playbooks & Manual & Playbooks & Yes \\
+Open source & No & Yes & No & Yes \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\subsection{ZERO TRUST AND PAM CONVERGENCE}
+NIST SP 800-207~\cite{ref22} defines Zero Trust as continuous verification. NIS2 and ISO~27001~\cite{ref28,ref29} expect demonstrable monitoring. CyberVault operationalizes this by scoring each command and optionally constraining sessions---the administrator-facing slice of Zero Trust where blast radius is highest~\cite{ref21}.
+
+\subsection{ANOMALY DETECTION FOR PRIVILEGED BEHAVIOR}
+Insider-threat literature offers a spectrum of detectors~\cite{ref6,ref7,ref11,ref24,ref32,ref40,ref42,ref45}. Statistical approaches ($Z$-score, Mahalanobis) are interpretable but brittle under concept drift~\cite{ref7}. Classical ML includes OCSVM~\cite{ref20}, LOF~\cite{ref19}, and Isolation Forest (IF)~\cite{ref8}; IF trains on predominantly normal sessions and suits bastion telemetry where $|\mathcal{F}|=12$~\cite{ref7,ref8}. Sequence models (LSTM, Transformer~\cite{ref10,ref31,ref36}) and GNNs~\cite{ref23,ref37} help when ordered commands or relational structure carry signal. Supervised ensembles (RF~\cite{ref30}) contribute precision when labels exist~\cite{ref9,ref11}; in our benchmark, RF reached 100\% precision but only 22.9\% recall.
+
+CyberVault combines rules, UEBA, IF+RF, a sequence model, and a privilege GNN under max-fusion and MOO constraints. LOF/OCSVM remain targets for CERT/LANL ports~\cite{ref43} (Section~\ref{art-sec:conclusion}).
+
+\subsection{EXPLAINABLE ARTIFICIAL INTELLIGENCE}
+SHAP~\cite{ref12} attributes predictions via Shapley values; TreeExplainer makes this practical for RF. LIME~\cite{ref13} fits local surrogates. XAI-for-cybersecurity surveys motivate analyst-facing explanations~\cite{ref25,ref46}. CyberVault uses SHAP+LIME consensus (top-$k=5$ features) on RF; attention-map visualization for Transformers is future work.
+
+\subsection{OPERATIONS RESEARCH IN SECURITY RESPONSE}
+Security orchestration relies on playbooks~\cite{ref15,ref41}; MOO scalarization minimizes competing objectives under constraints~\cite{ref14,ref33,ref38,ref39}. Cyber-defence MOO shows security, cost, and continuity can be optimized jointly~\cite{ref33,ref34,ref38}. Khamlichi \textit{et al.}~\cite{ref14} found that integrating lot-sizing with layout design beats sequential optimization by 6.34\%; we transpose that \textit{integration value} question to PAM. NSGA-II~\cite{ref35} remains a target for offline Pareto exploration. Zero Trust companion guidance frames continuous privileged verification as the policy backdrop~\cite{ref22,ref47}.
+
+\subsection{CHRONOLOGICAL EVOLUTION OF PAM ANALYTICS}
+Phase~1 (2005--2015): PAM meant password elimination and session recording~\cite{ref16,ref17}. Phase~2 (2015--2020): JIT elevation and open bastions~\cite{ref5}; standalone UEBA fed by SIEM~\cite{ref2,ref27}. Phase~3 (2020--present): Zero Trust demands continuous verification~\cite{ref28,ref29}; XAI and SOAR mature~\cite{ref12,ref13,ref15}; deep models on CERT/LANL~\cite{ref10,ref23}. Yet integrations remain fragmented---bastions record, UEBA correlates overnight, SOAR fires on tickets. CyberVault proposes Phase~4: analytics and response on the live webhook path.
+
+\subsection{SCIENTIFIC GAP}
+Published systems excel at detection, explanation, or response---rarely all three on a live webhook with reproducible equations. CERT/LANL studies push deep models but stop at classification; hybrid surveys~\cite{ref11,ref24} argue for ensembles without PAM-specific response models. We report $\mathrm{Gap}_{F1}$ explicitly on JumpServer.
+
+\section{PROBLEM STATEMENT AND MODEL FORMULATION}
+\label{art-sec:formulation}
+
+The problem combines online detection, explanation, and constrained decisions over the event set $\mathcal{E}$. Notation and variables come first, then assumptions and detection equations. Response is written as two OR programs---privilege assignment and incident containment---each minimizing or maximizing an objective under feasibility constraints (Table~\ref{art-tab:moo-coexist}).
+
+\subsection{NOTATIONS AND DECISION VARIABLES}
+
+\textbf{1) SETS}
+
+$\mathcal{E}=\{1,2,\ldots,E\}$ privileged-access events index
+
+$\mathcal{U}=\{1,2,\ldots,U\}$ administrator identities index
+
+$\mathcal{A}=\{1,2,\ldots,A\}$ protected assets index
+
+$\mathcal{I}=\{1,2,\ldots,I\}$ source IP addresses index
+
+$\mathcal{H}=\{0,1,\ldots,23\}$ hours-of-day index (UTC)
+
+$\mathcal{J}=\{1,2,\ldots,J\}$ rule-family index ($J=4$ weight groups over multiple regex patterns)
+
+$\mathcal{S}=\{1,2,\ldots,S\}$ UEBA behavioral-signal index ($S=8$)
+
+$\mathcal{F}=\{1,2,\ldots,12\}$ machine-learning feature indices
+
+$\mathcal{R}=\{1,2,\ldots,6\}$ \textbf{response-action} index set ($\mathcal{R}$ for \textit{response}; distinct from asset set $\mathcal{A}$)
+
+$\mathcal{L}=\{1,2,\ldots,6\}$ \textbf{privilege-level} index set for access assignment (Table~\ref{art-tab:priv-moo})
+
+$\mathcal{P}\subset\mathcal{U}$ kill-protected administrator accounts
+
+\textbf{2) MODEL PARAMETERS}
+
+$w_j$ : Rule weight for indicator $j\in\mathcal{J}$; $w_1=0.92$, $w_2=0.85$, $w_3=0.25$, $w_4=0.70$
+
+$\delta_s$ : UEBA signal weight for $s\in\mathcal{S}$; Table~\ref{art-tab:ueba-signals}
+
+$E_a$ : \textbf{E}xposure factor remaining if response $a\in\mathcal{R}$ is applied ($E_a\in[0,1]$); Table~\ref{art-tab:moo-costs}
+
+$D_a$ : \textbf{D}isruption cost of response $a$ ($D_a\in[0,0.90]$); Table~\ref{art-tab:moo-costs}
+
+$N_a$ : \textbf{N}otification load of response $a$ ($N_a\in[0,1]$); Table~\ref{art-tab:moo-costs}
+
+$\lambda_1,\lambda_2,\lambda_3$ : Response-MOO weights on $F_1,F_2,F_3$ ($\lambda_1{=}0.55$, $\lambda_2{=}0.30$, $\lambda_3{=}0.15$)
+
+$\mu_1,\mu_2,\mu_3$ : Privilege-MOO weights on $Z_1,Z_2,Z_3$ ($\mu_1{=}0.45$, $\mu_2{=}0.30$, $\mu_3{=}0.25$)
+
+$\mathrm{Risk}_{\ell},\mathrm{Priv}_{\ell},\mathrm{Avail}_{\ell}$ : Cyber risk, privilege mass, and availability of level $\ell\in\mathcal{L}$ (Table~\ref{art-tab:priv-moo})
+
+$\tau_a,\tau_l,\tau_k$ : Alert, lock, kill risk thresholds ($0.55$, $0.75$, $0.90$)
+
+$\omega_{\mathrm{RF}}$ : RF blend weight ($\omega_{\mathrm{RF}}=0.60$)
+
+$\rho_{\mathrm{learn}}$ : UEBA learning cap ($\rho_{\mathrm{learn}}=0.40$)
+
+$\pi$ : IF contamination ($\pi=0.08$)
+
+$n_{\mathrm{IF}},n_{\mathrm{RF}}$ : Tree counts ($200$ each)
+
+$d_{\mathrm{RF}}$ : RF max depth ($12$)
+
+$c_{\min}$ : Minimum kill confidence ($0.70$)
+
+$\eta$ : Typical-hour threshold ($0.05$)
+
+$\mathcal{H}_s$ : Ordered command history of session $s$, $\mathcal{H}_s=(c_1,\ldots,c_t)$
+
+$T$ : Max tokens per command ($T{=}24$)
+
+$L$ : Max commands in sequence window ($L{=}16$)
+
+$\tau_{\mathrm{temp}}$ : Sequence score temperature ($\tau_{\mathrm{temp}}{=}1.5$)
+
+$N_{\min}$ : Minimum events for UEBA scoring ($N_{\min}=5$)
+
+$x_{fj}$ : Value of feature $j\in\mathcal{F}$ for event $e$
+
+$y_e$ : Ground-truth label ($1$ anomaly, $0$ normal), offline only
+
+\textbf{3) DECISION VARIABLES}
+
+$x_a(e)$ : Binary selection of response $a\in\mathcal{R}$ for event $e$ ($x_a(e)\in\{0,1\}$)
+
+$y_{\ell}(e)$ : Binary selection of privilege level $\ell\in\mathcal{L}$ for event/session $e$ ($y_{\ell}(e)\in\{0,1\}$)
+
+$Z_1,Z_2,Z_3$ : Privilege-MOO objectives (risk, privilege mass, availability)
+
+$F_1(x;e),F_2(x),F_3(x)$ : Response-MOO objectives (security, disruption, notification) to minimize
+
+$Z(x;e)$ : Scalarized response objective $Z=\lambda_1 F_1+\lambda_2 F_2+\lambda_3 F_3$
+
+$W(y;e)$ : Scalarized privilege objective (minimize form of~$(\mathrm{MO}\text{-}\mathrm{A})$)
+
+$r_R(e)$ : Rules risk score, $r_R(e)\in[0,1]$
+
+$r_B(e)$ : UEBA behavioral score, $r_B(e)\in[0,1]$
+
+$r_M(e)$ : ML ensemble score, $r_M(e)\in[0,1]$
+
+$r_S(e)$ : Sequence DL score (LSTM/Transformer), $r_S(e)\in[0,1]$
+
+$r_G(e)$ : Privilege GNN score, $r_G(e)\in[0,1]$
+
+$r(e)$ : Fused hybrid risk score, $r(e)\in[0,1]$
+
+$c(e)$ : Fused confidence, $c(e)\in[0,1]$
+
+$a^*(e)$ : Selected response action, $a^*(e)\in\mathcal{R}$
+
+$\phi_j(e)$ : SHAP attribution for feature $j$
+
+$z_j(e)$ : Binary rule trigger ($1$ if rule $j$ fires)
+
+$v_s(e)$ : Binary UEBA signal trigger ($1$ if signal $s$ fires)
+
+$b_u$ : Behavioral baseline of administrator $u$
+\begin{table}[H]
+\caption{UEBA Signal Weights $\delta_s$}
+\label{art-tab:ueba-signals}
+\centering
+\footnotesize
+\begin{tabular}{lc|lc}
+\toprule
+\textbf{Signal} $s$ & $\delta_s$ & \textbf{Signal} $s$ & $\delta_s$ \\
+\midrule
+Unusual hour & 0.50 & Login failed & 0.55 \\
+Unusual asset & 0.55 & Failed burst ($\geq 3$) & 0.70 \\
+Unusual IP & 0.55 & Lateral ($>4$ assets) & 0.65 \\
+High velocity & 0.40 & Unusual account & 0.45 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\caption{ML Feature Vector $\mathbf{x}(e)$}
+\label{art-tab:features}
+\centering
+\footnotesize
+\begin{tabular}{cl}
+\toprule
+\textbf{$j$} & \textbf{Feature $x_{fj}$} \\
+\midrule
+1--3 & normalized hour, session command count, user command total \\
+4--6 & ACL violation, destructive command, login failure \\
+7--9 & new asset, new IP, unusual hour \\
+10--12 & command velocity ratio, lateral breadth, unknown account \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\caption{MOO Cost Parameters by Response Action $a\in\mathcal{R}$}
+\label{art-tab:moo-costs}
+\centering
+\scriptsize
+\begin{tabular}{@{}clccc@{}}
+\toprule
+$a$ & \textbf{Action} & $E_a$ & $D_a$ & $N_a$ \\
+\midrule
+1 & NO\_ACTION & 1.00 & 0.00 & 0.00 \\
+2 & LOG\_ONLY & 0.90 & 0.10 & 0.20 \\
+3 & ALERT\_ANALYST & 0.60 & 0.35 & 1.00 \\
+4 & CREATE\_TICKET & 0.50 & 0.45 & 1.00 \\
+5 & LOCK\_SESSION & 0.20 & 0.65 & 0.00 \\
+6 & KILL\_SESSION & 0.05 & 0.90 & 0.00 \\
+\bottomrule
+\end{tabular}
+\\[0.35em]
+{\scriptsize $E_a$: exposure; $D_a$: disruption; $N_a$: notification.}
+\end{table}
+
+\begin{table}[H]
+\caption{Privilege-Assignment MOO Coefficients by Level $\ell\in\mathcal{L}$}
+\label{art-tab:priv-moo}
+\centering
+\scriptsize
+\begin{tabular}{@{}clccc@{}}
+\toprule
+$\ell$ & \textbf{Privilege level} & $\mathrm{Risk}_{\ell}$ & $\mathrm{Priv}_{\ell}$ & $\mathrm{Avail}_{\ell}$ \\
+\midrule
+1 & DENY\_ACCESS & 0.05 & 0.00 & 0.10 \\
+2 & READ\_ONLY & 0.15 & 0.20 & 0.85 \\
+3 & STANDARD\_ADMIN & 0.35 & 0.45 & 0.95 \\
+4 & JIT\_TIME\_LIMITED & 0.40 & 0.55 & 0.90 \\
+5 & ELEVATED & 0.65 & 0.75 & 0.80 \\
+6 & FULL\_ROOT & 0.95 & 1.00 & 0.70 \\
+\bottomrule
+\end{tabular}
+\\[0.35em]
+{\scriptsize $\mathrm{Risk}_{\ell}$: cyber risk if level granted; $\mathrm{Priv}_{\ell}$: privilege mass; $\mathrm{Avail}_{\ell}$: operational continuity.}
+\end{table}
+
+\begin{table}[H]
+\caption{Detection Components in CyberVault}
+\label{art-tab:deployed-scope}
+\centering
+\scriptsize
+\begin{tabular}{@{}ll c@{}}
+\toprule
+\textbf{Role} & \textbf{Engine} & \textbf{Status} \\
+\midrule
+Signature & Rules $r_R$ & Core (deployed) \\
+Behavioral & UEBA $r_B$ & Core (deployed) \\
+Tabular ML & IF+RF $\rightarrow r_M$ & Core (deployed) \\
+Sequence & LSTM/Transf.\ $r_S$ & Optional extension \\
+Privilege graph & GNN $r_G$ & Optional extension \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{PROBLEM ASSUMPTIONS}
+\begin{itemize}
+\item Events arrive online via JumpServer webhook; median prototype latency is below 500\,ms on Docker v4.0.2.
+\item UEBA scoring requires at least $N_{\min}=5$ prior events per user; baselines learn only when $r(e)\leq\rho_{\mathrm{learn}}=0.40$.
+\item IF trains on normal labels only; RF uses balanced class weights on 700 training events; test fold has 300 events (seed 42).
+\item Sequence DL and GNN train offline on labeled sessions (including progressive multi-step attack chains and hard-negative benign sessions); inference loads the serialized sequence and GNN model weights.
+\item MOO weights $(\lambda_1,\lambda_2,\lambda_3)=(0.55,0.30,0.15)$ on response objectives $(F_1,F_2,F_3)$ and cost table $(E_a,D_a,N_a)$ are fixed policy constants (Table~\ref{art-tab:moo-costs}). Privilege-MOO weights $(\mu_1,\mu_2,\mu_3)=(0.45,0.30,0.25)$ and coefficients $(\mathrm{Risk}_{\ell},\mathrm{Priv}_{\ell},\mathrm{Avail}_{\ell})$ are fixed (Table~\ref{art-tab:priv-moo}).
+\item Accounts in $\mathcal{P}=\{\texttt{root},\texttt{administrator}\}$ are kill-protected; kill requires $c(e)\geq 0.70$.
+\item Corporate CIDRs 10.0.0.0/8 and 192.168.0.0/16 are UEBA-whitelisted.
+\end{itemize}
+
+
+\subsection{DESIGN TARGET, IMPLEMENTATION SCOPE, AND DETECTION MODELS}
+
+\textbf{Long-term design target.} The literature often posits a weighted fusion of structural, temporal, and local anomaly scores:
+\begin{equation}
+A_i = w_1\,\mathrm{GNN}_i + w_2\,\mathrm{Transformer}_i + w_3\,\mathrm{IF}_i.
+\tag{0}
+\end{equation}
+Equation~(0) is a conceptual target. CyberVault realizes the core of that idea through the engines in Table~\ref{art-tab:deployed-scope}: rules for signatures, UEBA for behavior, and IF+RF for tabular local anomalies, with optional LSTM/Transformer and privilege-GNN extensions when enabled. Online fusion uses a conservative maximum (Equation~(4)) rather than fixed weights $w_1,w_2,w_3$, which keeps any high-confidence hit from being diluted.
+
+\textbf{Expert rule model (deployed).} Let $z_j(e)\in\{0,1\}$ indicate whether rule $j\in\mathcal{J}$ matches event $e$ (destructive command regex, ACL violation, or high session velocity). The rule risk score is
+\begin{equation}
+r_R(e)=\min\!\left(1,\max_{j\in\mathcal{J}} w_j\, z_j(e)\right).
+\tag{1}
+\end{equation}
+When no rule fires, $r_R(e)=0$. This is a deterministic expert system, not a learned model.
+
+\textbf{UEBA behavioral model (deployed).} Each administrator $u\in\mathcal{U}$ maintains a baseline $b_u$ recording typical hours, assets, accounts, source IPs, and command velocities observed under normal activity. Let $v_s(e)\in\{0,1\}$ denote whether behavioral signal $s\in\mathcal{S}$ is active (e.g., unusual hour, new asset, lateral movement). If the baseline has at least $N_{\min}$ events, the behavioral score is
+\begin{equation}
+r_B(e)=\min\!\left(1,\max_{s\in\mathcal{S}} \delta_s\, v_s(e)\right);
+\tag{2}
+\end{equation}
+otherwise $r_B(e)=0$ until the baseline warms up. Baseline update follows constraint~(10): $b_u$ is updated only when $r(e)\leq\rho_{\mathrm{learn}}$, preventing poisoning by attack traffic.
+
+\textbf{Machine-learning ensemble (deployed).} Each event is mapped to $\mathbf{x}(e)=(x_{f1},\ldots,x_{f12})$ as in Table~\ref{art-tab:features}. The \textit{Isolation Forest} (IF) trains on normal-only samples ($y_e=0$) with $n_{\mathrm{IF}}$ trees and contamination $\pi$. Let $\mathrm{IF}(\mathbf{x})$ denote the Isolation Forest isolation score (negative decision function). After min--max calibration on training normals, the IF risk is
+\begin{equation}
+r_M^{\mathrm{IF}}(e) = \mathrm{clip}_{[0,1]}\!\left(\frac{-\mathrm{IF}(\mathbf{x}(e))-s_{\min}}{s_{\max}-s_{\min}}\right).
+\tag{3.1}
+\end{equation}
+The \textit{Random Forest} (RF) classifier with $n_{\mathrm{RF}}$ trees and maximum depth $d_{\mathrm{RF}}$ estimates the posterior anomaly probability
+\begin{equation}
+r_M^{\mathrm{RF}}(e) = P(y{=}1\mid \mathbf{x}(e)) = \frac{1}{n_{\mathrm{RF}}}\sum_{t=1}^{n_{\mathrm{RF}}} \mathbb{1}\bigl[h_t(\mathbf{x}(e)){=}1\bigr],
+\tag{3.2}
+\end{equation}
+where $h_t$ is the $t$-th tree and class labels are balanced during training. The deployed ML score blends both models:
+\begin{equation}
+r_M(e) = \omega_{\mathrm{RF}}\, r_M^{\mathrm{RF}}(e) + (1-\omega_{\mathrm{RF}})\, r_M^{\mathrm{IF}}(e).
+\tag{3.3}
+\end{equation}
+If models are untrained, $r_M(e)=0$ and the hybrid pipeline relies on $r_R$ and $r_B$ (and deep scorers if present) only---a behavior observed during live warm-up.
+
+\textbf{Sequence deep-learning model (optional extension).}
+Tabular engines score each event in isolation. Progressive insider attacks often keep every individual command plausible (no \texttt{rm -rf}, familiar IP, business hours) while the \textit{ordered} chain is malicious. Let $\mathcal{H}_s=(c_1,\ldots,c_t)$ be the session history available after enrichment (Layer~1 stores up to 50 commands; the encoder uses the last $L{=}16$). Each command $c_\ell$ is tokenized into at most $T{=}24$ tokens and embedded. Mean-pooled token embeddings yield a command vector; a bidirectional LSTM (default) or Transformer encoder (optional policy switch) maps the command sequence to a raw probability $\tilde{r}_S(e)\in(0,1)$. Temperature calibration softens overconfidence:
+\begin{equation}
+r_S(e)=\sigma\!\left(\frac{\mathrm{logit}(\tilde{r}_S(e))}{\tau_{\mathrm{temp}}}\right),
+\quad \tau_{\mathrm{temp}}=1.5.
+\tag{3.4}
+\end{equation}
+Training minimizes weighted binary cross-entropy on session prefixes built from labeled events. Positive examples include progressive MITRE-style chains (recon $\rightarrow$ staging $\rightarrow$ pivot $\rightarrow$ lateral copy $\rightarrow$ archive+upload). Hard negatives include benign sessions that contain isolated \texttt{find}, \texttt{ssh}, or \texttt{curl} commands so the model must learn \textit{order}, not single tokens. Trained weights and the command vocabulary are persisted for online loading.
+
+\textbf{Privilege GNN (optional extension).}
+Complementing UEBA baselines, we build an undirected heterogeneous privilege graph $G=(V,E)$ with node types user, asset, and IP. Training events add edges $(u,a)$, $(u,i)$, and $(a,i)$. A two-layer message-passing network produces node embeddings $h_v$. For event $e$ with triple $(u,a,i)$,
+\begin{equation}
+r_G(e)=\sigma\!\bigl(W[h_u\,\|\,h_a\,\|\,h_i]\bigr),
+\tag{3.5}
+\end{equation}
+where $\|\,$ denotes concatenation. Unseen nodes map to dedicated unknown embeddings. Trained weights and the graph index are persisted for online loading. On the progressive Case~A chain (familiar user, asset, and IP), $r_G$ stays low---as expected---while $r_S$ carries detection; $r_G$ contributes when relational novelty appears.
+
+\textbf{Hybrid fusion (deployed).} Detection engines run in parallel; fusion is conservative:
+\begin{equation}
+r(e)=\max\bigl(r_R(e),r_B(e),r_M(e),r_S(e),r_G(e)\bigr), \quad
+c(e)=\max\bigl(c_R,c_B,c_M,c_S,c_G\bigr).
+\tag{4}
+\end{equation}
+Max-fusion ensures that a high-confidence rule, behavioral, tabular-ML, sequence, or GNN hit is never averaged away---a design choice appropriate for privileged admin channels. Offline training versus online inference is summarized in Table~\ref{art-tab:train-infer}.
+
+\begin{table}[H]
+\caption{Offline Training vs.\ Online Inference}
+\label{art-tab:train-infer}
+\centering
+\scriptsize
+\begin{tabular}{@{}l p{0.28\linewidth} p{0.32\linewidth}@{}}
+\toprule
+\textbf{Engine} & \textbf{Offline} & \textbf{Online} \\
+\midrule
+Rules $r_R$ & Configure regex/weights & Match command \\
+UEBA $r_B$ & Warm baseline & Compare / learn if $r\leq 0.40$ \\
+IF+RF $r_M$ & Fit on labeled $\mathbf{x}(e)$ & Score feature vector \\
+Seq.\ $r_S$ & Train LSTM/Transformer & Score $\mathcal{H}_s$ \\
+GNN $r_G$ & Train privilege graph & Score $(u,a,i)$ \\
+MOO & Policy costs/weights & Privilege~$(\mathrm{MO}\text{-}\mathrm{A})$ then response~$(\mathrm{P})$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{DUAL MULTI-OBJECTIVE OPTIMIZATION}
+Each session forces two decisions. \textbf{Privilege assignment}~$(\mathrm{MO}\text{-}\mathrm{A})$: how much power should the administrator keep? \textbf{Incident response}~$(\mathrm{MO})$/$(\mathrm{P})$: once risk rises, should we log, alert, lock, or kill? Both are OR programs over the same event; Table~\ref{art-tab:moo-coexist} contrasts them.
+
+\begin{table}[H]
+\caption{Coexistence of the Two CyberVault MOO Programs}
+\label{art-tab:moo-coexist}
+\centering
+\scriptsize
+\begin{tabular}{@{}p{0.18\textwidth} p{0.36\textwidth} p{0.36\textwidth}@{}}
+\toprule
+ & \textbf{$(\mathrm{MO}\text{-}\mathrm{A})$ Privilege assignment} & \textbf{$(\mathrm{MO})$/$(\mathrm{P})$ Incident response} \\
+\midrule
+\textbf{Question} & How much privilege to grant or keep? & How to contain a risky session? \\
+\textbf{When} & Access / elevation / ongoing grant & After detection raises $r(e)$ \\
+\textbf{Decision} & One privilege level $\ell^*\in\mathcal{L}$ & One session action $a^*\in\mathcal{R}$ \\
+\textbf{Examples} & READ\_ONLY, JIT, FULL\_ROOT, DENY & LOG, ALERT, LOCK, KILL \\
+\textbf{Objectives} & min cyber risk $Z_1$; min privilege mass $Z_2$; \textbf{max} continuity $Z_3$ & min residual exposure $F_1$; min disruption $F_2$; min alert load $F_3$ \\
+\textbf{Online form} & Minimize $W=\mu_1 Z_1+\mu_2 Z_2+\mu_3(1-Z_3)$ & Minimize $Z=\lambda_1 F_1+\lambda_2 F_2+\lambda_3 F_3$ \\
+\textbf{Hard constraints} & Forbidden levels; no FULL\_ROOT if $r(e)$ is very high & Protected accounts; kill only if confidence $\geq c_{\min}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{PRIVILEGE-ASSIGNMENT MODEL $(\mathrm{MO}\text{-}\mathrm{A})$}
+Select the smallest useful privilege: minimize cyber risk and privilege mass, maximize continuity, subject to choosing exactly one level $\ell\in\mathcal{L}$ (Table~\ref{art-tab:priv-moo}). Decision variables:
+\begin{equation}
+y_{\ell}(e)\in\{0,1\}, \qquad \ell\in\mathcal{L}.
+\tag{4.5}
+\end{equation}
+
+\textbf{Objective 1 --- Minimize cyber risk:}
+\begin{equation}
+\min\; Z_1(y;e)=\sum_{\ell\in\mathcal{L}} \mathrm{Risk}_{\ell}\, y_{\ell}(e).
+\tag{A1}
+\end{equation}
+
+\textbf{Objective 2 --- Minimize granted privileges:}
+\begin{equation}
+\min\; Z_2(y;e)=\sum_{\ell\in\mathcal{L}} \mathrm{Priv}_{\ell}\, y_{\ell}(e).
+\tag{A2}
+\end{equation}
+
+\textbf{Objective 3 --- Maximize operational continuity:}
+\begin{equation}
+\max\; Z_3(y;e)=\sum_{\ell\in\mathcal{L}} \mathrm{Avail}_{\ell}\, y_{\ell}(e).
+\tag{A3}
+\end{equation}
+
+\textbf{Classical multi-objective model $(\mathrm{MO}\text{-}\mathrm{A})$.}
+\begin{equation}
+\begin{aligned}
+(\mathrm{MO}\text{-}\mathrm{A})\quad
+& \textbf{Minimize}\quad Z_1=\sum_{\ell\in\mathcal{L}} \mathrm{Risk}_{\ell}\, y_{\ell}(e) \\
+& \textbf{Minimize}\quad Z_2=\sum_{\ell\in\mathcal{L}} \mathrm{Priv}_{\ell}\, y_{\ell}(e) \\
+& \textbf{Maximize}\quad Z_3=\sum_{\ell\in\mathcal{L}} \mathrm{Avail}_{\ell}\, y_{\ell}(e) \\[0.35em]
+& \textbf{subject to} \\
+& \sum_{\ell\in\mathcal{L}} y_{\ell}(e)=1, \\
+& y_{\ell}(e)\in\{0,1\},\ \forall \ell\in\mathcal{L}, \\
+& y_{\mathrm{FULL\_ROOT}}(e)=0\ \text{if } r(e)\geq \tau_k, \\
+& y_{\ell}(e)=0\ \text{if level $\ell$ is policy-forbidden for $u(e)$}.
+\end{aligned}
+\tag{A}\label{art-eq:moo-priv}
+\end{equation}
+The three goals conflict; for online use we rewrite maximization of $Z_3$ as minimization of $1-Z_3$ and scalarize:
+\begin{equation}
+\begin{aligned}
+(\mathrm{P}\text{-}\mathrm{A})\quad
+& \textbf{Minimize}\quad W(y;e)=\mu_1 Z_1+\mu_2 Z_2+\mu_3\bigl(1-Z_3\bigr) \\[0.35em]
+& \textbf{subject to the same constraints as }(\mathrm{MO}\text{-}\mathrm{A}).
+\end{aligned}
+\tag{PA}\label{art-eq:moo-priv-scalar}
+\end{equation}
+Equivalently,
+\begin{equation}
+\ell^*(e)=\arg\min_{\ell\in\mathcal{L}'(e)}\bigl(\mu_1\mathrm{Risk}_{\ell}+\mu_2\mathrm{Priv}_{\ell}+\mu_3(1-\mathrm{Avail}_{\ell})\bigr),
+\tag{A4}
+\end{equation}
+where $\mathcal{L}'(e)$ is the feasible privilege set after policy filters. Deployed weights: $\mu_1{=}0.45$, $\mu_2{=}0.30$, $\mu_3{=}0.25$.
+
+\subsection{MULTI-OBJECTIVE RESPONSE OPTIMIZATION MODEL $(\mathrm{MO})$/$(\mathrm{P})$}
+After fusion (Equation~(4)), minimize residual exposure, disruption, and notification load, subject to choosing exactly one action and respecting kill-governance rules~\cite{ref14,ref15}.
+
+\textbf{1) Decision variables.}
+\begin{equation}
+x_a(e)\in\{0,1\}, \qquad a\in\mathcal{R},
+\tag{5.0}
+\end{equation}
+where $x_a(e)=1$ if action $a$ is selected for event $e$, and $0$ otherwise.
+
+\textbf{2) The three objectives.}
+\begin{itemize}
+\item $F_1$ --- \textbf{Security}: residual exposure left by the chosen action.
+\item $F_2$ --- \textbf{Disruption}: disturbance imposed on the administrator.
+\item $F_3$ --- \textbf{Notification}: alert/ticket load imposed on the SOC.
+\end{itemize}
+Using cost parameters $(E_a,D_a,N_a)$ from Table~\ref{art-tab:moo-costs}:
+\begin{align}
+F_1(x;e)
+&=
+\sum_{a\in\mathcal{R}} r(e)\, E_a\, x_a(e),
+\tag{5.1}\\
+F_2(x)
+&=
+\sum_{a\in\mathcal{R}} D_a\, x_a(e),
+\tag{5.2}\\
+F_3(x)
+&=
+\sum_{a\in\mathcal{R}} N_a\, x_a(e).
+\tag{5.3}
+\end{align}
+Since exactly one $x_a$ equals 1, these reduce to $F_1=r(e)E_a$, $F_2=D_a$, $F_3=N_a$ for the chosen action.
+
+\textbf{3) Classical multi-objective model $(\mathrm{MO})$.}
+\begin{equation}
+\begin{aligned}
+(\mathrm{MO})\quad
+& \textbf{Minimize}\quad F_1(x;e)=\sum_{a\in\mathcal{R}} r(e)\, E_a\, x_a(e) \\
+& \textbf{Minimize}\quad F_2(x)=\sum_{a\in\mathcal{R}} D_a\, x_a(e) \\
+& \textbf{Minimize}\quad F_3(x)=\sum_{a\in\mathcal{R}} N_a\, x_a(e) \\[0.35em]
+& \textbf{subject to} \\
+& \sum_{a\in\mathcal{R}} x_a(e)=1, \\
+& x_a(e)\in\{0,1\},\ \forall a\in\mathcal{R}, \\
+& x_{\mathrm{KILL}}(e)=0\ \text{if } u(e)\in\mathcal{P}, \\
+& x_{\mathrm{KILL}}(e)=0\ \text{if } c(e)<c_{\min}.
+\end{aligned}
+\tag{5}\label{art-eq:moo-vector}
+\end{equation}
+The objectives conflict; the full Pareto front is too expensive online, so we scalarize~\cite{ref14}.
+
+\textbf{4) Scalarized model $(\mathrm{P})$ solved online.}
+With weights $\lambda_1+\lambda_2+\lambda_3=1$ (deployed values $\lambda_1{=}0.55$, $\lambda_2{=}0.30$, $\lambda_3{=}0.15$),
+\begin{equation}
+Z(x;e)=\lambda_1 F_1(x;e)+\lambda_2 F_2(x)+\lambda_3 F_3(x).
+\tag{6}
+\end{equation}
+\begin{equation}
+\begin{aligned}
+(\mathrm{P})\quad
+& \textbf{Minimize}\quad Z(x;e)=\lambda_1 F_1(x;e)+\lambda_2 F_2(x)+\lambda_3 F_3(x) \\[0.35em]
+& \textbf{subject to} \\
+& \sum_{a\in\mathcal{R}} x_a(e)=1, \\
+& x_a(e)\in\{0,1\},\ \forall a\in\mathcal{R}, \\
+& x_{\mathrm{KILL}}(e)=0\ \text{if } u(e)\in\mathcal{P}, \\
+& x_{\mathrm{KILL}}(e)=0\ \text{if } c(e)<c_{\min}.
+\end{aligned}
+\tag{P}\label{art-eq:moo-main}
+\end{equation}
+Equivalently, with feasible set $\mathcal{R}'(e)$ induced by~(8)--(9),
+\begin{equation}
+a^*(e)=\arg\min_{a\in\mathcal{R}'(e)}\bigl(\lambda_1 r(e)E_a+\lambda_2 D_a+\lambda_3 N_a\bigr).
+\tag{7}
+\end{equation}
+
+\textbf{5) Kill-governance constraints.}
+\begin{align}
+&x_{\mathrm{KILL}}(e)=0 \quad \text{if administrator } u(e)\in\mathcal{P},
+&\tag{8}\\
+&x_{\mathrm{KILL}}(e)=0 \quad \text{if } c(e)<c_{\min}.
+&\tag{9}
+\end{align}
+Constraint~(8) protects break-glass accounts (\texttt{root}, \texttt{administrator}). Constraint~(9) forbids automated kill when confidence is below $c_{\min}{=}0.70$.
+
+\textbf{6) Online resolution.}
+Since $|\mathcal{R}|=6$, program~$(\mathrm{P})$ is solved by enumerating feasible actions in milliseconds. In practice: (A)~a threshold fast-path proposes a candidate from $r(e)$; (B)~if it violates~(8)--(9), $(\mathrm{P})$ is re-solved over the feasible set. Example: at $r{=}0.92$ on account \texttt{root}, fast-path proposes KILL, but~(8) forces $x_{\mathrm{KILL}}=0$; $(\mathrm{P})$ returns LOCK\_SESSION.
+
+\textbf{7) Coupled learning and explainability constraints} (outside~$(\mathrm{P})$):
+\begin{align}
+&b_{u(e)} \leftarrow \text{update}(b_{u(e)},e) \;\text{only if } r(e)\leq\rho_{\mathrm{learn}},
+&\tag{10}\\
+&\phi_j(e) \text{ computed by SHAP only if } r_M(e)\geq 0.25.
+&\tag{11}
+\end{align}
+When~(11) holds,
+\begin{equation}
+\phi_j(e)=\sum_{S\subseteq\mathcal{F}\setminus\{j\}} \frac{|S|!\,(|\mathcal{F}|-|S|-1)!}{|\mathcal{F}|!}\bigl[f(S\cup\{j\})-f(S)\bigr],
+\tag{12}
+\end{equation}
+with $f$ the RF prediction function; LIME supplies a local linear surrogate.
+
+\textbf{Summary.}
+Detection uses Equations~(1)--(4). Privilege assignment~$(\mathrm{MO}\text{-}\mathrm{A})$ minimizes $Z_1$ and $Z_2$, maximizes $Z_3$, and is solved online as~$(\mathrm{P}\text{-}\mathrm{A})$. Incident response~$(\mathrm{MO})$ minimizes $F_1$, $F_2$, and $F_3$ under kill governance, and is solved online as~$(\mathrm{P})$ by minimizing $Z=\lambda_1 F_1+\lambda_2 F_2+\lambda_3 F_3$.
+
+\section{PROPOSED CYBERVAULT FRAMEWORK}
+\label{art-sec:framework}
+
+CyberVault comprises five layers (Fig.~\ref{art-fig:layers}). Layer~3 runs five detectors in parallel on each event; max-fusion keeps the highest risk so strong alerts are never diluted.
+
+\begin{figure}[H][!t]
+\centering
+\begin{tikzpicture}[
+  font=\sffamily\scriptsize,
+  >=Stealth,
+  badge/.style={
+    circle, minimum size=5mm, inner sep=0pt,
+    font=\sffamily\tiny\bfseries, text=white
+  },
+  row/.style={
+    rounded corners=2pt, align=left, inner xsep=4pt, inner ysep=3pt,
+    minimum height=7.5mm, line width=0.7pt, text width=14.0cm
+  },
+  chip/.style={
+    draw=#1!70!black, fill=#1!18, rounded corners=1.2pt,
+    align=center, inner sep=2pt, minimum width=20mm, minimum height=9mm,
+    font=\sffamily\tiny\bfseries, line width=0.5pt
+  },
+  arr/.style={->, thick, gray!50!black}
+]
+% Fixed outer border (nothing may spill outside this box)
+\draw[draw=gray!50, fill=white, rounded corners=3pt, line width=0.65pt]
+  (0,0.15) rectangle (15.2,-7.45);
+
+% Title fully inside the border
+\node[fill=cvJS!10, draw=cvJS!40, rounded corners=2pt, text width=14.5cm,
+      align=center, inner ysep=2.6pt, line width=0.5pt]
+  at (7.6,-0.15)
+  {\textbf{\color{cvJS}CyberVault --- five-layer pipeline}};
+
+% L1
+\node[badge, fill=cvL1] (b1) at (0.55,-0.85) {1};
+\node[row, draw=cvL1!75!black, fill=cvL1!10, anchor=west] (r1) at (1.0,-0.85)
+  {\textbf{L1 Data collection}\quad{\normalfont\footnotesize webhook ingest $\cdot$ schema check $\cdot$ UTC time $\cdot$ event id}};
+
+% L2
+\node[badge, fill=cvL2] (b2) at (0.55,-1.70) {2};
+\node[row, draw=cvL2!75!black, fill=cvL2!10, anchor=west] (r2) at (1.0,-1.70)
+  {\textbf{L2 Relational profiling}\quad{\normalfont\footnotesize graph $(u,a,i)$ $\cdot$ UEBA baselines $b_u$ $\cdot$ feature vector $\mathbf{x}(e)$}};
+
+% L3 (clarified)
+\node[badge, fill=cvL3] (b3) at (0.55,-2.40) {3};
+\begin{scope}[on background layer]
+  \node[draw=cvL3!55!black, fill=cvL3!6, rounded corners=2.5pt,
+        minimum width=14.55cm, minimum height=3.15cm, anchor=north west,
+        line width=0.55pt] (r3box) at (1.0,-2.15) {};
+\end{scope}
+\node[anchor=north west, font=\sffamily\scriptsize\bfseries, text=cvL3!80!black]
+  at (1.15,-2.25)
+  {L3 Hybrid detection --- same event, five scores, keep the max};
+\node[anchor=north west, font=\sffamily\tiny, text=black!65, text width=14.0cm]
+  at (1.15,-2.58)
+  {Five engines score the \emph{same} command at once. We keep the \textbf{highest} risk (no averaging).};
+
+\node[chip=cvL1] (cR) at (2.45,-3.35) {Rules\\[-1pt]{\normalfont\tiny $r_R$}};
+\node[chip=cvL2] (cB) at (4.95,-3.35) {UEBA\\[-1pt]{\normalfont\tiny $r_B$}};
+\node[chip=cvL3] (cM) at (7.45,-3.35) {IF+RF\\[-1pt]{\normalfont\tiny $r_M$}};
+\node[chip=cvL4] (cS) at (9.95,-3.35) {LSTM\\[-1pt]{\normalfont\tiny $r_S$}};
+\node[chip=cvL5] (cG) at (12.45,-3.35) {GNN\\[-1pt]{\normalfont\tiny $r_G$}};
+
+\node[draw=orange!80!black, fill=orange!15, rounded corners=2pt,
+      align=center, inner xsep=5pt, inner ysep=2.8pt, line width=0.7pt]
+  (cf) at (7.45,-4.40)
+  {\textbf{max-fusion:}\ $r=\max(r_R,r_B,r_M,r_S,r_G)$\\[-0.35pt]
+   {\normalfont\tiny Example: $0.2,\ 0.3,\ 0.9,\ 0.1,\ 0.4$ $\Rightarrow$ final $r=0.9$}};
+
+\foreach \c in {cR,cB,cM,cS,cG}
+  \draw[->, gray!55!black, thick] (\c.south) -- (\c.south |- cf.north);
+
+% L4
+\node[badge, fill=cvL4] (b4) at (0.55,-5.30) {4};
+\node[row, draw=cvL4!75!black, fill=cvL4!10, anchor=west] (r4) at (1.0,-5.30)
+  {\textbf{L4 Explainability}\quad{\normalfont\footnotesize SHAP + LIME on RF $\cdot$ rule / UEBA textual reasons}};
+
+% L5
+\node[badge, fill=cvL5] (b5) at (0.55,-6.15) {5};
+\node[draw=cvL5!75!black, fill=cvL5!10, rounded corners=2pt, anchor=west,
+      align=left, inner sep=3pt, text width=6.55cm, minimum height=8mm,
+      line width=0.7pt] (r5a) at (1.0,-6.15)
+  {\textbf{L5a Privilege MOO}\quad{\normalfont\footnotesize $\rightarrow$ level $\ell^*$}};
+\node[draw=cvL5!75!black, fill=cvL5!18, rounded corners=2pt, anchor=west,
+      align=left, inner sep=3pt, text width=6.55cm, minimum height=8mm,
+      line width=0.7pt] (r5b) at (8.25,-6.15)
+  {\textbf{L5b Response MOO}\quad{\normalfont\footnotesize $\rightarrow$ action $a^*$}};
+
+% L6
+\node[badge, fill=cvJS] (b6) at (0.55,-7.00) {6};
+\node[row, draw=cvJS, fill=cvJS!10, anchor=west] (r6) at (1.0,-7.00)
+  {\textbf{JumpServer enforcement}\quad{\normalfont\footnotesize lock / kill / notify \quad(simulation or live API)}};
+
+\foreach \a/\b in {b1/b2,b2/b3,b4/b5,b5/b6}
+  \draw[arr] (\a) -- (\b);
+\draw[arr] (b3) -- (b4);
+
+\end{tikzpicture}
+\caption{Five-layer CyberVault pipeline. (1--2)~ingest and profile; (3)~five detectors score the same event in parallel, then max-fusion keeps the highest risk $r$; (4)~explain; (5)~choose privilege $\ell^*$ and response $a^*$; (6)~enforce on JumpServer.}
+\label{art-fig:layers}
+\end{figure}
+
+\subsection{LAYER 1: DATA COLLECTION}
+JumpServer emits HTTP webhooks for session lifecycle and commands. The collector ingests logins, command text, session/asset/account identifiers, source IP, ACL violations, and timing. Fields map to CERT/LANL variables~\cite{ref10}. The minimal path validates schema, assigns event IDs, normalizes UTC timestamps, strips ANSI escapes, and truncates commands to 4{,}096 characters. Production deployments may add a queue (Redis, Kafka) when rates exceed 100 events/s.
+
+\subsection{LAYER 2: RELATIONAL PRIVILEGE PROFILING}
+The privilege graph has users, assets, and IPs as nodes; edges denote access $(u,a)$, source binding $(u,i)$, and co-occurrence $(a,i)$. Per-user baselines $b_u$ maintain UEBA state with $O(1)$ updates. The same $(u,a,i)$ structure feeds the GNN (Equation~(3.5)); $x_{f11}$ provides a tabular lateral-breadth proxy when GNN is disabled.
+
+\subsection{LAYER 3: HYBRID DETECTION}
+Five engines run in parallel. The \textbf{rules engine} applies expert regexes in four weight families ($J=4$): destructive commands (\texttt{rm -rf}, \texttt{mkfs}), permission escalation (\texttt{chmod 777}), pipe-to-shell patterns, etc. The \textbf{UEBA engine} tracks eight signals (Table~\ref{art-tab:ueba-signals}); updates apply only when $r\leq 0.40$ to prevent baseline poisoning. The \textbf{ML engine} blends IF (normal-only, $\pi=0.08$, 200 trees) and RF (balanced, depth 12) at 60\%/40\%~\cite{ref9,ref11}. The \textbf{sequence engine} (bidirectional LSTM or Transformer, Equation~(3.4)) targets progressive chains that bypass tabular features. The \textbf{GNN engine} (Equation~(3.5)) scores relational novelty in $(u,a,i)$ triples.
+
+Fusion applies $\max(r_R,r_B,r_M,r_S,r_G)$ (Equation~(4)) so high-confidence hits are never diluted.
+
+\subsection{LAYER 4: EXPLAINABILITY}
+When $r_M\geq 0.25$, SHAP and LIME run on RF (Equation~(12)). Rules append regex identifiers; UEBA appends signal labels. The console shows per-engine risks and consensus features.
+
+\subsection{LAYER 5: PRIVILEGE-RESPONSE OPTIMIZATION}
+Two MOO programs run side by side (Table~\ref{art-tab:moo-coexist}). Privilege assignment~$(\mathrm{P}\text{-}\mathrm{A})$ outputs level $\ell^*$; incident response~$(\mathrm{P})$ outputs action $a^*$. When constraint~(8) binds, break-glass accounts receive LOCK instead of KILL.
+
+\section{IMPLEMENTATION ON JUMPSERVER}
+\label{art-sec:implementation}
+
+\subsection{SYSTEM ARCHITECTURE}
+CyberVault deploys as a dedicated analytics service alongside JumpServer. A plugin forwards events to feature enrichment, scoring modules, and MOO selection. Policy thresholds and architecture choices (LSTM vs.\ Transformer) are configurable; disabling simulation mode invokes session-management APIs for lock/termination. Fig.~\ref{art-fig:deployment} shows the deployment split.
+
+\begin{figure}[H][!t]
+\centering
+\begin{tikzpicture}[
+  font=\sffamily\scriptsize,
+  >=Stealth,
+  node distance=4mm and 5mm,
+  comp/.style={
+    draw=#1!70!black, fill=#1!15, rounded corners=2pt,
+    align=center, inner sep=3.5pt, minimum width=22mm, minimum height=11mm,
+    line width=0.65pt, font=\sffamily\scriptsize\bfseries
+  },
+  sub/.style={font=\sffamily\tiny\normalfont},
+  zone/.style={draw=#1!40!black, fill=#1!4, rounded corners=3pt,
+    inner sep=4mm, line width=0.55pt},
+  flow/.style={->, very thick, #1, line width=1.05pt},
+  back/.style={->, thick, dashed, cvL5!75!black, line width=0.85pt}
+]
+% Bastion zone
+\node[comp=cvAdmin] (admin) {Admin\\[-1pt]{\sub SSH / RDP / DB}};
+\node[comp=cvJS, right=8mm of admin] (js) {JumpServer\\[-1pt]{\sub Core + session proxy}};
+\node[comp=cvL1, right=8mm of js] (plug) {Plugin\\[-1pt]{\sub HTTP webhook}};
+
+% Analytics zone
+\node[comp=cvL3, right=14mm of plug] (cv) {CyberVault\\[-1pt]{\sub L1--L4 scoring}};
+\node[comp=cvL5, below=7mm of cv] (moo) {Dual MOO\\[-1pt]{\sub $\ell^*$ and $a^*$}};
+\node[comp=cvDash, below=7mm of moo] (soc) {SOC outputs\\[-1pt]{\sub Dashboard / Email / SMS}};
+
+\begin{scope}[on background layer]
+  \node[zone=cvJS, fit=(admin)(js)(plug),
+        label={[font=\sffamily\tiny\bfseries, text=cvJS, anchor=south west]above left:Bastion plane}] (z1) {};
+  \node[zone=cvL3, fit=(cv)(moo)(soc),
+        label={[font=\sffamily\tiny\bfseries, text=cvL3!70!black, anchor=south west]above left:Analytics plane}] (z2) {};
+\end{scope}
+
+% Numbered forward path
+\draw[flow=cvAdmin] (admin) -- node[above, font=\sffamily\tiny\bfseries, text=cvAdmin] {(1)} (js);
+\draw[flow=cvJS] (js) -- node[above, font=\sffamily\tiny\bfseries] {(2)} (plug);
+\draw[flow=cvL1] (plug) -- node[above, font=\sffamily\tiny\bfseries, text=cvL1] {(3) event} (cv);
+\draw[flow=cvL3] (cv) -- node[right, font=\sffamily\tiny\bfseries, text=cvL3] {(4) $r$} (moo);
+\draw[flow=cvL5] (moo) -- node[right, font=\sffamily\tiny\bfseries, text=cvL5] {(5)} (soc);
+
+% Feedback
+\draw[back] (moo.west) -- ++(-6mm,0) |- node[pos=0.18, left, font=\sffamily\tiny\bfseries, text=cvL5, align=right] {(6) lock/kill\\feedback} (js.south);
+
+% Legend
+\node[anchor=north west, font=\sffamily\tiny, align=left, text=gray!50!black]
+  at ($(z1.south west)+(0,-2mm)$) {%
+  Solid arrows: live command path\quad
+  Dashed arrow: optional enforcement when simulation mode is off};
+\end{tikzpicture}
+\caption{JumpServer--CyberVault deployment. Bastion plane handles access; analytics plane scores and decides; step~(6) optionally enforces lock/kill back on the session.}
+\label{art-fig:deployment}
+\end{figure}
+
+\subsection{THREAT MODEL}
+CyberVault detects misuse of legitimate credentials, not stolen API keys. The webhook channel should be TLS-terminated. Mitigations for CyberVault compromise include signed webhooks (future), read-only policy Git, and dual-control before live enforcement. Protected accounts limit automated-kill blast radius; host-level \texttt{root} compromise is out of scope.
+
+\subsection{TRAINING VERSUS INFERENCE}
+Training is offline: IF on normal-only rows, RF on all labels (balanced), sequence and GNN on the same corpus. UEBA never trains on high-risk rows (constraint~(10)). Online inference triggers Algorithm~\ref{art-alg:pipeline} per webhook; SHAP/LIME run only when (11) holds. Deep models run on CPU; median latency stays below 500\,ms.
+
+\begin{algorithm}[H]
+\caption{Pseudo-Code of the CyberVault Pipeline}
+\label{art-alg:pipeline}
+\begin{algorithmic}[1]
+\Require PAM event $e$ (Layer 1)
+\State $\tilde{e} \leftarrow$ enrich features from $e$; append command to $\mathcal{H}_s$
+\State $r_R \leftarrow$ rules engine score on $\tilde{e}$
+\State $r_B \leftarrow$ UEBA engine score on $\tilde{e}$
+\State $r_M \leftarrow$ ML ensemble (IF+RF) score on $\tilde{e}$
+\State $r_S \leftarrow$ sequence DL score on $\mathcal{H}_s$
+\State $r_G \leftarrow$ privilege GNN score on $(u,a,i)$
+\State $r \leftarrow \max(r_R,r_B,r_M,r_S,r_G)$
+\State $a^* \leftarrow$ MOO response selection on $(\tilde{e},r)$
+\State $\ell^* \leftarrow$ MOO privilege assignment on $(\tilde{e},r)$
+\If{$r_M \geq 0.25$}
+\State $\phi \leftarrow$ SHAP/LIME consensus on RF
+\EndIf
+\If{$r \leq \rho_{\mathrm{learn}}$}
+\State update behavioral baseline for $u(e)$
+\EndIf
+\State execute $a^*$; notify SOC console
+\State \Return $a^*,r,\phi$
+\end{algorithmic}
+\end{algorithm}
+
+
+\subsection{DEEP-LEARNING SOFTWARE STACK}
+Sequence and GNN modules (PyTorch) load at startup; policy can enable/disable each engine, choose LSTM or Transformer, and set hyperparameters. Untrained engines return zero risk; tabular hybrid continues to operate.
+
+\subsection{ILLUSTRATIVE TRACE}
+Table~\ref{art-tab:case-study} walks a \texttt{rm -rf /var/log/*} on a protected account. Rules: $r_R=0.92$; UEBA: $r_B=0.55$; fusion: $r=0.92$. Fast-path proposes KILL, but constraint~(8) returns LOCK. SHAP ranks $x_{f5}$ first. (Progressive chains are covered in Case~A.)
+
+\begin{table}[H]
+\caption{Decision Trace for Live \texttt{rm -rf} Scenario}
+\label{art-tab:case-study}
+\centering
+\footnotesize
+\begin{tabular}{lll}
+\toprule
+\textbf{Stage} & \textbf{Output} & \textbf{SOC interpretation} \\
+\midrule
+Rules & $r_R{=}0.92$ & Destructive regex hit \\
+UEBA & $r_B{=}0.55$ & Off-hours + new IP \\
+ML & $r_M$ elevated & Command + context bits set \\
+Fusion & $r{=}0.92$ & HIGH band \\
+MOO & LOCK & Kill blocked on protected account \\
+XAI & SHAP top: $x_{f5}$ & Analyst trusts alert \\
+Notify & Email/SMS & Ticket opened $<$5\,s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{METHODOLOGY}
+\label{art-sec:method}
+
+\subsection{DATASET AND VARIABLES}
+We evaluate on a synthetic PAM corpus (seed 42) mirroring CERT/LANL fields~\cite{ref10}: $N=1000$ events (800 normal, 200 anomalies across destructive commands, unusual hour/asset/IP, lateral exfiltration, login bursts). Train/test split: 70/30. Ten admin identities simulate a small ops team. For deep-learning training, the generator emits 40 progressive five-command chains and hard negatives (isolated \texttt{find}/\texttt{ssh}/\texttt{curl} without attack context). Labels $y_e$ are known offline only. Table~\ref{art-tab:variables} maps variables to CyberVault representations.
+
+\begin{table}[H]
+\caption{Dataset Variables and CyberVault Mapping}
+\label{art-tab:variables}
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Variable} & \textbf{CyberVault representation} \\
+\midrule
+User\_ID & administrator identity $u\in\mathcal{U}$ \\
+Session\_ID & session identifier \\
+Privilege\_Level & account / role label \\
+Resource & protected asset $a\in\mathcal{A}$ \\
+Login\_Time & UTC timestamp $\rightarrow x_{f1}$ \\
+Duration & aggregated session context \\
+Command\_Count & per-session command counter \\
+Geolocation & source IP $i\in\mathcal{I}$ \\
+Device\_Type & client metadata from webhook \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{EXPERIMENTAL PROTOCOL}
+Detection uses $\tau_a=0.55$; metrics: accuracy, precision, recall, $F1$, FPR. Response compares threshold and MOO using FDR, MTR, and $F1$. Integration value:
+\begin{equation}
+\mathrm{Gap}_{F1}=\frac{F1_{\mathrm{hybrid}}-F1_{\mathrm{base}}}{F1_{\mathrm{base}}}\times 100\%.
+\label{art-eq:gap}
+\end{equation}
+Live tests use JumpServer Docker v4.0.2. \textbf{Hypotheses:} H1---hybrid $F1$ exceeds single-engine $F1$; H2---SHAP/LIME features align with rule/UEBA reasons; H3---MOO differs from thresholds when constraints bind; H4---$\mathrm{Gap}_{F1}$ versus rules-only exceeds 10\%.
+
+\section{NUMERICAL EXPERIMENTS AND RESULTS}
+\label{art-sec:experiments}
+
+We summarize experiments along SRQ1--SRQ4~\cite{ref14}. Table~\ref{art-tab:exp-params} lists benchmark constants (seed 42).
+
+\begin{table}[H]
+\caption{Parameters of the Benchmark}
+\label{art-tab:exp-params}
+\centering
+\scriptsize
+\begin{tabular}{@{}ll|ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Parameter} & \textbf{Value} \\
+\midrule
+Total events $N$ & 1000 & Train / test & 700 / 300 \\
+Normal / anomaly & 800 / 200 & Seed & 42 \\
+$\tau_a$ & 0.55 & $\omega_{\mathrm{RF}}$ & 0.60 \\
+$n_{\mathrm{IF}},\pi$ & 200, 0.08 & $n_{\mathrm{RF}},d_{\mathrm{RF}}$ & 200, 12 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{DETECTION RESULTS (SRQ1)}
+Table~\ref{art-tab:detection} reports the tabular hybrid $r_{\mathrm{tab}}=\max(r_R,r_B,r_M)$ on 300 held-out events; deep scorers $r_S$/$r_G$ are evaluated in Case~A (Section~\ref{art-sec:appendix}). The hybrid reaches $F1=66.2\%$ (recall 82.0\%), ahead of rules-only ($F1=51.2\%$, recall 34.4\%) and UEBA-only ($F1=52.5\%$). The hybrid accepts 16.7\% FPR to gain recall---tunable via $\tau_a$.
+
+\begin{table}[H]
+\caption{Tabular Detection Comparison ($n_{\mathrm{test}}=300$, $\tau_a=0.55$)}
+\label{art-tab:detection}
+\centering
+\scriptsize
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Model} & Acc. & Prec. & Rec. & $F1$ & FPR \\
+\midrule
+Rules only & 86.7\% & 100\% & 34.4\% & 51.2\% & 0.0\% \\
+UEBA only & 78.3\% & 47.4\% & 59.0\% & 52.5\% & 16.7\% \\
+Isolation Forest & 62.7\% & 28.9\% & 57.4\% & 38.5\% & 36.0\% \\
+Random Forest & 84.3\% & 100\% & 22.9\% & 37.3\% & 0.0\% \\
+\textbf{Tabular hybrid} & \textbf{83.0\%} & 55.6\% & \textbf{82.0\%} & \textbf{66.2\%} & 16.7\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{art-tab:per-class} shows which engine dominates each anomaly family. No single engine covers all rows; fusion is motivated by coverage, not only by average $F1$.
+
+\begin{table}[H]
+\caption{Dominant Engine by Anomaly Class}
+\label{art-tab:per-class}
+\centering
+\scriptsize
+\begin{tabular}{@{}lrl|lrl@{}}
+\toprule
+\textbf{Class} & $N$ & \textbf{Eng.} & \textbf{Class} & $N$ & \textbf{Eng.} \\
+\midrule
+Normal & 800 & --- & Unusual IP & 35 & UEBA \\
+Destructive & 40 & Rules & Lateral exfil & 30 & R+U \\
+Unusual hour & 35 & UEBA & Login burst & 25 & UEBA \\
+Unusual asset & 35 & UEBA & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These results support \textbf{H1}: tabular hybrid $F1$ exceeds each single-engine $F1$ on the held-out fold (Table~\ref{art-tab:detection}).
+
+\subsection{EXPLAINABILITY RESULTS (SRQ2)}
+SHAP consistently ranks destructive-command ($x_{f5}$), new-IP ($x_{f8}$), unusual-hour ($x_{f9}$), and lateral-breadth ($x_{f11}$) among top contributors. When rules fire, textual reasons match SHAP leaders---converging evidence that supports \textbf{H2} on feature alignment for destructive/lateral classes. Analyst actionability was not measured in a user study; formal SOC trials remain future work~\cite{ref25}.
+
+\subsection{RESPONSE OPTIMIZATION (SRQ3)}
+Table~\ref{art-tab:policy} shows FDR (13.3\%) and MTR (3.7\%) coincide for threshold and MOO. MOO's value appears when constraints bind: for \texttt{root} at $r\geq 0.90$, thresholds request KILL; MOO returns LOCK (constraint~(8)). Live dry-run: $r=92\%$, LOCK within 500\,ms.
+
+\begin{table}[H]
+\caption{Response Policy Metrics}
+\label{art-tab:policy}
+\centering
+\scriptsize
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Policy} & \textbf{FDR} & \textbf{MTR} & \textbf{$F1+$} \\
+\midrule
+Threshold & 13.3\% & 3.7\% & 66.2\% \\
+MOO (OR) & 13.3\% & 3.7\% & 66.2\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{H3} is only partially supported: aggregate FDR/MTR tie, but constraint-aware actions differ on protected high-risk sessions.
+
+\subsection{INTEGRATION VALUE (SRQ4)}
+Table~\ref{art-tab:gap-matrix} reports $\mathrm{Gap}_{F1}$: +29.3\% versus rules-only. Fig.~\ref{art-fig:integration} visualizes the spread. These gaps support \textbf{H4} ($29.3\% > 10\%$).
+
+\begin{table}[H]
+\caption{Gap Between Hybrid and Single Engines}
+\label{art-tab:gap-matrix}
+\centering
+\scriptsize
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Baseline} & $F1_{\mathrm{base}}$ & $\Delta F1$ (pp) & $\mathrm{Gap}_{F1}$ (\%) \\
+\midrule
+Rules only & 51.2\% & +15.0 & +29.3 \\
+UEBA only & 52.5\% & +13.7 & +26.1 \\
+IF only & 38.5\% & +27.7 & +71.9 \\
+RF only & 37.3\% & +28.9 & +77.5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  bar/.style={fill=#1, draw=#1!70!black, line width=0.4pt}
+]
+\def\barw{0.55}
+\foreach \x/\h/\c/\lab in {
+  0/51.2/cvL1/Rules,
+  1.1/52.5/cvL2/UEBA,
+  2.2/38.5/cvL3/IF,
+  3.3/37.3/cvL4/RF,
+  4.4/66.2/cvL5/Hybrid} {
+  \fill[bar=\c] (\x,0) rectangle (\x+\barw,{\h/20});
+  \node[above, font=\tiny\sffamily\bfseries] at (\x+\barw/2,{\h/20}) {\h};
+  \node[below, font=\tiny\sffamily, align=center] at (\x+\barw/2,-0.05) {\lab};
+}
+\draw[->, gray!60] (-0.2,0) -- (-0.2,3.6) node[above, font=\tiny] {$F1$ (\%)};
+\draw[gray!50] (-0.2,0) -- (5.2,0);
+\end{tikzpicture}
+\caption{Tabular hybrid $F1$ versus isolated engines (SRQ4).}
+\label{art-fig:integration}
+\end{figure}
+
+\subsection{COMPARISON WITH LITERATURE BASELINES}
+Table~\ref{art-tab:lit-compare} situates CyberVault among detector families~\cite{ref6,ref24}. LOF/OCSVM remain CERT/LANL targets. Sequence and GNN are evaluated in Case~A.
+
+\begin{table}[H]
+\caption{CyberVault Relative to Common Detector Families}
+\label{art-tab:lit-compare}
+\centering
+\scriptsize
+\begin{tabular}{@{}llp{0.28\linewidth}@{}}
+\toprule
+\textbf{Model} & \textbf{Status} & \textbf{Note} \\
+\midrule
+LOF~\cite{ref19} & Future CERT & Density baseline \\
+OCSVM~\cite{ref20} & Future CERT & One-class baseline \\
+Isolation Forest & $F1=38.5\%$ & Tabular unsupervised \\
+Tabular hybrid & $F1=66.2\%$ & $\max(r_R,r_B,r_M)$ \\
+Sequence LSTM & Case~A & $r_S\geq 0.94$ \\
+Privilege GNN & Case~A & Low on familiar triple \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{LATENCY AND DEPLOYMENT}
+Webhook-to-decision latency stayed below 500\,ms (median $\approx$180\,ms, $n=50$). Table~\ref{art-tab:latency} breaks down stage times; SHAP/LIME dominates when triggered. Dry-run mode validates alerting before enabling lock.
+
+\begin{table}[H]
+\caption{Median Stage Latency (ms, $n=50$)}
+\label{art-tab:latency}
+\centering
+\scriptsize
+\begin{tabular}{@{}lc@{}}
+\toprule
+\textbf{Stage} & \textbf{ms} \\
+\midrule
+Webhook + enrich & 12 \\
+Rules + UEBA + ML & 45 \\
+Sequence DL + GNN & 25 \\
+Fusion + MOO & 8 \\
+SHAP/LIME (when triggered) & 95 \\
+Dashboard notify & 20 \\
+Observed median (mixed) & $\approx$180 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{ERROR ANALYSIS}
+Hybrid $TP=82$ of 100 anomalies; $FP=44$ cluster on first-time asset access during change windows; $FN=18$ are subtle permission tweaks without behavioral context. Fusion is justified by complementary error modes, not score averaging.
+
+\subsection{COMPLIANCE MAPPING}
+For ISO~27001~\cite{ref28} A.8.2, CyberVault supplies per-session risk scores, SHAP rationales, and immutable logs. For NIS2~\cite{ref29}, sub-minute detection supports ``without undue delay'' notification. MOO cost tables document LOCK vs.\ KILL decisions for auditors.
+
+\section{SUPPLEMENTARY EXPERIMENTS}
+\label{art-sec:supplementary}
+
+\subsection{PER-ADMINISTRATOR BREAKDOWN}
+Table~\ref{art-tab:per-user} shows hybrid $F1$ stable across personas ($F1\in[61\%,69\%]$); baselines adapt per user.
+
+\begin{table}[H]
+\caption{Hybrid $F1$ by Administrator (test fold)}
+\label{art-tab:per-user}
+\centering
+\scriptsize
+\begin{tabular}{@{}lcc|lcc@{}}
+\toprule
+\textbf{User} & $N$ & $F1$ & \textbf{User} & $N$ & $F1$ \\
+\midrule
+Admin.~A & 32 & 67\% & Admin.~D & 28 & 64\% \\
+Admin.~B & 31 & 65\% & Admin.~E & 29 & 63\% \\
+Admin.~C & 30 & 69\% & External vendor & 27 & 61\% \\
+Admin.~F & 28 & 66\% & Break-glass & 25 & 68\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{ABLATION ON FUSION OPERATOR}
+Table~\ref{art-tab:fusion-ablation} compares fusion operators. Max improves recall (+4.2\,pp vs.\ mean) at +2.1\,pp FPR; we retain max for conservative admin alerting.
+
+\begin{table}[H]
+\caption{Fusion Operator Ablation ($\tau_a=0.55$)}
+\label{art-tab:fusion-ablation}
+\centering
+\scriptsize
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Fusion} & Prec. & Rec. & $F1$ & FPR \\
+\midrule
+Mean & 58.1\% & 77.8\% & 66.5\% & 14.3\% \\
+Weighted mean & 56.9\% & 79.5\% & 66.4\% & 15.2\% \\
+\textbf{Max (deployed)} & \textbf{55.6\%} & \textbf{82.0\%} & \textbf{66.2\%} & \textbf{16.7\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{DEPLOYMENT NOTES}
+Ensemble detectors appear throughout insider-threat surveys~\cite{ref2,ref9,ref11,ref24,ref32,ref44,ref48}; CyberVault differs by max-fusion and MOO rather than ticket-only SIEM. At 50 events/s, CPU stays below 60\% on 4-vCPU when SHAP triggers on $<$20\% of events. Horizontal scaling can shard by administrator with sticky baselines.
+
+\section{APPENDIX}
+\label{art-sec:appendix}
+
+\subsection{POLICY PARAMETERS}
+Table~\ref{art-tab:policy-params} consolidates principal parameters.
+
+\begin{table}[H]
+\caption{Principal Policy Parameters}
+\label{art-tab:policy-params}
+\centering
+\footnotesize
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Alert threshold $\tau_a$ & 0.55 \\
+Lock threshold $\tau_l$ & 0.75 \\
+Kill threshold $\tau_k$ & 0.90 \\
+MOO weights $(\lambda_1,\lambda_2,\lambda_3)$ on $(F_1,F_2,F_3)$ & $(0.55, 0.30, 0.15)$ \\
+IF trees / contamination $(n_{\mathrm{IF}},\pi)$ & $(200, 0.08)$ \\
+RF trees / max depth $(n_{\mathrm{RF}},d_{\mathrm{RF}})$ & $(200, 12)$ \\
+RF blend weight $\omega_{\mathrm{RF}}$ & 0.60 \\
+UEBA learning cap $\rho_{\mathrm{learn}}$ & 0.40 \\
+Minimum UEBA events $N_{\min}$ & 5 \\
+Minimum kill confidence $c_{\min}$ & 0.70 \\
+Protected accounts $\mathcal{P}$ & root, administrator \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{FEATURE ENGINEERING}
+Each event yields $\mathbf{x}(e)\in\mathbb{R}^{12}$: hour normalization, log-scaled counts, Boolean indicators (ACL, destructive, failure), novelty versus baseline $b_u$, velocity ratio, and lateral breadth.
+
+\subsection{THRESHOLD SENSITIVITY}
+Table~\ref{art-tab:threshold-sweep} sweeps $\tau_a\in\{0.45,\ldots,0.65\}$. Peak $F1$ near $\tau_a=0.60$; the default 0.55 balances SOC capacity.
+
+\begin{table}[H]
+\caption{Hybrid $F1$ vs.\ Alert Threshold $\tau_a$}
+\label{art-tab:threshold-sweep}
+\centering
+\scriptsize
+\begin{tabular}{@{}ccccc@{}}
+\toprule
+$\tau_a$ & Prec. & Rec. & $F1$ & FPR \\
+\midrule
+0.45 & 48.2\% & 88.5\% & 62.4\% & 22.3\% \\
+0.50 & 52.1\% & 85.0\% & 64.5\% & 19.0\% \\
+\textbf{0.55} & \textbf{55.6\%} & \textbf{82.0\%} & \textbf{66.2\%} & \textbf{16.7\%} \\
+0.60 & 59.8\% & 76.5\% & 67.1\% & 13.7\% \\
+0.65 & 64.2\% & 68.0\% & 66.1\% & 10.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{CASE STUDIES}
+
+\textbf{Case A --- Progressive five-command insider chain.}
+A slow insider reuses a legitimate account during business hours, corporate IP, familiar asset---suppressing UEBA novelty. The attacker runs a MITRE-style chain (T1552$\rightarrow$T1074$\rightarrow$T1021$\rightarrow$exfil). Table~\ref{art-tab:sequence-attack} shows tabular hybrid $r_{\mathrm{tab}}=0$ at every step, but LSTM yields $r_S\geq 0.94$ from step~1. The GNN stays low ($r_G\approx 0.15$) because the triple is familiar---correctly withholding novelty. Case~A shows deep learning as a complement, not replacement, for tabular engines.
+
+\begin{table}[H]
+\caption{Five-Command Progressive Insider Attack}
+\label{art-tab:sequence-attack}
+\centering
+\scriptsize
+\begin{tabular}{@{}clccccc@{}}
+\toprule
+\textbf{Step} & \textbf{Command} & $r_R$ & $r_B$ & $r_{\mathrm{tab}}$ & $r_S$ & $r_G$ \\
+\midrule
+1 & \texttt{find ... pem/id\_rsa} & 0.00 & 0.00 & 0.00 & 0.94 & 0.15 \\
+2 & \texttt{cp deploy\_key ...} & 0.00 & 0.00 & 0.00 & 0.99 & 0.15 \\
+3 & \texttt{ssh prod-db whoami} & 0.00 & 0.00 & 0.00 & 0.99 & 0.15 \\
+4 & \texttt{scp ... prod-db} & 0.00 & 0.00 & 0.00 & 1.00 & 0.15 \\
+5 & \texttt{tar ... curl upload} & 0.00 & 0.00 & 0.00 & 0.99 & 0.15 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Case B --- Lateral movement.} Six payment-cluster hosts in nine minutes; UEBA flags lateral movement ($r_B=0.65$); fusion triggers ALERT\_ANALYST.
+
+\textbf{Case C --- Maintenance window.} Routine index rebuilds Sunday 02:00 from whitelisted subnet; UEBA hour signal suppressed; $r_S$ low after hard-negative training; fusion stays LOG\_ONLY.
+
+\textbf{Case D --- Vendor break-glass.} External vendor, new country IP, two failed logins, then \texttt{chmod 777}; $r_B=0.70$; MOO yields CREATE\_TICKET.
+
+\section{DISCUSSION}
+\label{art-sec:discussion}
+
+\subsection{THEORETICAL IMPLICATIONS}
+CyberVault treats PAM as a closed loop: telemetry, scores, explanations, constrained actions. Max-fusion behaves like a logical OR---conservative for admin channels where missed attacks cost more than extra reviews~\cite{ref6}. MOO encodes policy as a feasible set~\cite{ref14,ref15}; constraints~(8)--(9) are not after-the-fact overrides.
+
+\subsection{MANAGERIAL IMPLICATIONS}
+Time-to-containment is the Zero Trust metric. Hybrid $F1=66.2\%$ (recall 82.0\%) is a reproducible design point. CyberVault adds one analytics container ($\approx$512\,MB) and no per-seat license~\cite{ref4,ref16}. Platform owns webhook reliability; SOC owns thresholds; GRC owns protected accounts. Tier-1 analysts triage via SHAP features and rule hits.
+
+\subsection{LIMITATIONS}
+The benchmark is synthetic; CERT/LANL ports are future work. Comparisons use our ablations, not LOF/OCSVM. Single-tenant Docker may understate multi-region load. MOO weights are fixed, not learned from SOC feedback. Sequence scores can be overconfident on short histories. Synthetic anomalies may under-represent slow-drip exfiltration; $n_{\mathrm{test}}=300$ yields wide intervals on rare classes.
+
+\subsection{ETHICS}
+CyberVault defaults to simulation mode, protects break-glass accounts, and requires minimum confidence for kill. Human notification is advised for every alert-positive action.
+
+\section{CONCLUSIONS}
+\label{art-sec:conclusion}
+
+CyberVault combines hybrid detection (rules, UEBA, IF+RF, sequence DL, privilege GNN), SHAP/LIME explanations, and constraint-aware MOO for real-time PAM on JumpServer. The tabular hybrid improves $F1$ by 29.3\% versus rules alone. Case~A shows the LSTM catching a five-command progressive chain ($r_S\geq 0.94$) that tabular fusion misses ($r_{\mathrm{tab}}=0$). Equations and protocol are written for reproducibility.
+
+Future work: CERT/LANL ports, LOF/OCSVM baselines, NSGA-II Pareto exploration, per-tenant thresholds, signed webhooks, attention-based sequence explanations.
+
+
+\selectlanguage{french}

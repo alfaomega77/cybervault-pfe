@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CyberVault — analytics IA pour accès privilégiés JumpServer">
+  <title>CyberVault — PAM Risk Intelligence</title>
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
+  <link rel="stylesheet" href="/static/css/landing.css?v=20260718">
+</head>
+<body data-page="landing">
+  <a class="skip-link" href="#main-content">Aller au contenu</a>
+
+  <div class="lv-banner">
+    <div class="container">
+      <span>PoC open-source · dry-run par défaut · aucune coupure automatique</span>
+      <a href="/signup.html">Commencer →</a>
+    </div>
+  </div>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="/">
+        <div class="brand-badge" aria-hidden="true">CV</div>
+        <span>CyberVault</span>
+      </a>
+      <nav class="nav-links" aria-label="Navigation principale">
+        <a href="#what">Plateforme</a>
+        <a href="#how">Fonctionnement</a>
+        <a href="#benefits">Avantages</a>
+        <a href="/login.html">Connexion</a>
+        <a href="/signup.html" class="nav-cta">Créer un compte</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section class="lv-hero">
+      <div class="container lv-hero-grid">
+        <div>
+          <div class="lv-eyebrow">AI PAM Risk Intelligence</div>
+          <h1>
+            CyberVault
+            <span class="accent">sécurise vos accès admin.</span>
+          </h1>
+          <div class="lv-partner">
+            <span class="lv-partner-label">Intégré avec</span>
+            <span class="lv-partner-badge">JumpServer PAM</span>
+          </div>
+          <p class="lead">
+            Analysez les sessions privilégiées en temps quasi réel — commandes, connexions,
+            comportement admin — et obtenez des décisions explicables : journal, alerte, verrouillage ou coupure.
+          </p>
+          <div class="lv-hero-actions">
+            <a class="btn btn-primary btn-lg" href="/signup.html">Essayer le dashboard</a>
+            <a class="btn btn-secondary btn-lg" href="/login.html">Se connecter</a>
+          </div>
+        </div>
+        <aside class="lv-hero-panel" aria-label="Démarrage en 3 étapes">
+          <h3>Opérationnel en 3 étapes</h3>
+          <div class="lv-step">
+            <div class="lv-step-num">1</div>
+            <div>
+              <strong>Lancer la stack</strong>
+              <span><code>docker compose up --build</code></span>
+            </div>
+          </div>
+          <div class="lv-step">
+            <div class="lv-step-num">2</div>
+            <div>
+              <strong>Connecter JumpServer</strong>
+              <span>Ou importer des logs JSON / JSONL.</span>
+            </div>
+          </div>
+          <div class="lv-step">
+            <div class="lv-step-num">3</div>
+            <div>
+              <strong>Surveiller en dry-run</strong>
+              <span>Décisions IA + explications — sans kill auto.</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="what" class="lv-section alt">
+      <div class="container">
+        <div class="lv-section-head">
+          <h2>Une couche intelligente au-dessus de votre PAM</h2>
+          <p>Pas un remplacement de JumpServer — un copilote SOC pour les accès privilégiés.</p>
+        </div>
+        <div class="lv-cards">
+          <article class="lv-card">
+            <div class="lv-card-icon" aria-hidden="true">RT</div>
+            <h3>Détection temps réel</h3>
+            <p>Commandes dangereuses, heures inhabituelles, nouveaux serveurs et IP inconnues.</p>
+          </article>
+          <article class="lv-card">
+            <div class="lv-card-icon" aria-hidden="true">AI</div>
+            <h3>Intelligence comportementale</h3>
+            <p>Règles + UEBA + ML avec explications compréhensibles pour le SOC.</p>
+          </article>
+          <article class="lv-card">
+            <div class="lv-card-icon" aria-hidden="true">MO</div>
+            <h3>Décision multi-objectifs</h3>
+            <p>Équilibre sécurité, disruption opérationnelle et fatigue d’alertes.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="lv-section">
+      <div class="container">
+        <div class="lv-section-head">
+          <h2>Comment ça marche</h2>
+          <p>Un flux clair, auditables de bout en bout.</p>
+        </div>
+        <div class="lv-flow">
+          <strong>Admin</strong> → <strong>JumpServer</strong> → événement →
+          <strong>IA</strong> (Règles + UEBA + ML) → score → décision →
+          action (<strong>Journal</strong> / <strong>Alerte</strong> / <strong>Session</strong>)
+        </div>
+        <div class="lv-compliance" aria-label="Cas d'usage">
+          <span class="lv-badge">Zero Trust</span>
+          <span class="lv-badge">Audit PAM</span>
+          <span class="lv-badge">SOC</span>
+          <span class="lv-badge">Réponse à incident</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="benefits" class="lv-section alt">
+      <div class="container">
+        <div class="lv-section-head">
+          <h2>Pourquoi CyberVault</h2>
+          <p>Au-delà du contrôle d’accès : comprendre si le comportement est anormal.</p>
+        </div>
+        <div class="lv-cards">
+          <article class="lv-card">
+            <div class="lv-card-icon" aria-hidden="true">ZT</div>
+            <h3>Stopper les abus actifs</h3>
+            <p>Détecte l’abus de credentials et les commandes destructrices avant l’impact.</p>
+          </article>
+          <article class="lv-card">
+            <div class="lv-card-icon" aria-hidden="true">SOC</div>
+            <h3>Moins de bruit</h3>
+            <p>Scores contextualisés et raisons lisibles pour prioriser le vrai risque.</p>
+          </article>
+          <article class="lv-card">
+            <div class="lv-card-icon" aria-hidden="true">OK</div>
+            <h3>Preuves d’audit</h3>
+            <p>Journal horodaté des décisions pour démontrer une surveillance continue.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="lv-cta">
+      <div class="container">
+        <h2>Prêt à sécuriser vos accès privilégiés ?</h2>
+        <p>Créez un compte, importez des logs ou connectez JumpServer — en mode test par défaut.</p>
+        <div class="lv-cta-actions">
+          <a class="btn btn-primary btn-lg" href="/signup.html">Créer mon compte</a>
+          <a class="btn btn-secondary btn-lg" href="/integrate.html">Voir l’intégration</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <div><strong>CyberVault</strong> — PAM Risk Intelligence</div>
+      <div>© 2026 CyberVault</div>
+    </div>
+  </footer>
+  <script src="/static/js/common.js?v=20260718"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "samples": 700,
+  "features": [
+    "hour_norm",
+    "session_command_count_norm",
+    "user_total_commands_norm",
+    "acl_violation",
+    "destructive_command",
+    "login_failed",
+    "is_new_asset",
+    "is_new_ip",
+    "is_unusual_hour",
+    "velocity_ratio",
+    "lateral_asset_count_norm",
+    "account_unknown"
+  ],
+  "isolation_forest_trained_on": 552,
+  "random_forest_classes": [
+    0,
+    1
+  ]
+}

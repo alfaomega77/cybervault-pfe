@@ -1,0 +1,131 @@
+# Destructive command patterns (regex)
+destructive_patterns:
+  - '(?i)\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?-r'
+  - '(?i)\bdd\s+if='
+  - '(?i)\bmkfs\.'
+  - '(?i)\bshutdown\b'
+  - '(?i)\breboot\b'
+  - '(?i)\bchmod\s+777\b'
+  - '(?i)\bwget\s+.*\|\s*(ba)?sh'
+  - '(?i)\bcurl\s+.*\|\s*(ba)?sh'
+
+# Risk score thresholds for rule-only mode
+thresholds:
+  alert: 0.55
+  lock: 0.75
+  kill: 0.90
+
+# Risk level labels (miniOrange-style Low / Medium / High)
+risk_levels:
+  low: 0.25
+  medium: 0.55
+  high: 0.75
+
+# Multi-objective optimization weights (security, disruption, alert_fatigue)
+# Response MOO (MO)/(P): minimize F1, F2, F3
+moo_weights:
+  security: 0.55
+  disruption: 0.30
+  alert_fatigue: 0.15
+
+# Privilege-assignment MOO (MO-A)/(P-A):
+#   min Z1 = sum Risk * y     (cyber risk)
+#   min Z2 = sum Privilege * y (granted privileges)
+#   max Z3 = sum Availability * y (operational continuity)
+privilege_moo:
+  enabled: true
+  weights:
+    risk: 0.45
+    privilege: 0.30
+    availability: 0.25
+  forbidden_levels: []
+  coefficients:
+    DENY_ACCESS: {risk: 0.05, privilege: 0.00, availability: 0.10}
+    READ_ONLY: {risk: 0.15, privilege: 0.20, availability: 0.85}
+    STANDARD_ADMIN: {risk: 0.35, privilege: 0.45, availability: 0.95}
+    JIT_TIME_LIMITED: {risk: 0.40, privilege: 0.55, availability: 0.90}
+    ELEVATED: {risk: 0.65, privilege: 0.75, availability: 0.80}
+    FULL_ROOT: {risk: 0.95, privilege: 1.00, availability: 0.70}
+
+# Hard compliance constraints
+constraints:
+  max_kills_per_user_per_hour: 3
+  min_confidence_for_kill: 0.70
+  protected_accounts:
+    - root
+    - administrator
+
+# Action severity costs (lower = cheaper for ops)
+action_costs:
+  NO_ACTION: 0.0
+  LOG_ONLY: 0.1
+  ALERT_ANALYST: 0.35
+  CREATE_TICKET: 0.45
+  LOCK_SESSION: 0.65
+  KILL_SESSION: 0.90
+
+# Phase 2: privileged-user behavioral baselines
+behavioral:
+  enabled: true
+  min_events_for_scoring: 5
+  learn_max_risk: 0.40
+  hour_activity_threshold: 0.05
+  velocity_multiplier: 3.0
+  failed_login_burst_count: 3
+  lateral_movement_assets: 4
+  # Corporate IPs/CIDRs — skip behavioral scoring (reduces false positives)
+  whitelist_ips:
+    - 10.0.0.0/8
+    - 192.168.0.0/16
+  signals:
+    unusual_hour: 0.50
+    unusual_asset: 0.55
+    unusual_account: 0.45
+    unusual_ip: 0.55
+    high_velocity_vs_baseline: 0.40
+    login_failed: 0.55
+    login_failed_burst: 0.70
+    lateral_movement: 0.65
+
+# Phase 3: machine learning models
+ml:
+  enabled: true
+  supervised_enabled: true
+  blend_weight_rf: 0.6
+  isolation_forest:
+    n_estimators: 200
+    contamination: 0.08
+    random_state: 42
+  random_forest:
+    n_estimators: 200
+    max_depth: 12
+    random_state: 42
+
+# Explainability (SHAP + LIME) for ML decisions
+explainability:
+  enabled: true
+  top_k: 5
+  min_risk_to_explain: 0.25
+  explain_all: false
+
+# Phase 4: deep learning (sequence + privilege GNN)
+deep_learning:
+  enabled: true
+  sequence:
+    enabled: true
+    architecture: lstm   # lstm | transformer
+    max_seq: 16
+    max_tokens: 24
+    emb_dim: 64
+    hidden: 64
+    nhead: 4
+    nlayers: 2
+    vocab_size: 4000
+    epochs: 12
+    batch_size: 64
+    temperature: 1.5
+  gnn:
+    enabled: true
+    emb_dim: 32
+    hidden: 64
+    epochs: 20

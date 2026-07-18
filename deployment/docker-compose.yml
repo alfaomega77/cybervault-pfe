@@ -1,0 +1,93 @@
+name: cybervault
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    restart: unless-stopped
+    volumes:
+      - cybervault-redis:/data
+    networks:
+      - analytics
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      AISS_CONSUMER_MODE: redis
+      AISS_REDIS_URL: redis://redis:6379/10
+      AISS_REDIS_CHANNEL: fm.security_events
+      AISS_HTTP_INGEST: "true"
+      AISS_HTTP_INGEST_PORT: "8090"
+      AISS_DRY_RUN: "true"
+      AISS_PUBLIC_URL: ${AISS_PUBLIC_URL:-http://localhost:8090}
+      AISS_WEBHOOK_TOKEN: ${AISS_WEBHOOK_TOKEN:-cybervault-local-demo-token}
+      AISS_ALLOW_SIGNUP: ${AISS_ALLOW_SIGNUP:-true}
+      AISS_SMTP_HOST: ${AISS_SMTP_HOST:-}
+      AISS_SMTP_PORT: ${AISS_SMTP_PORT:-587}
+      AISS_SMTP_TLS: ${AISS_SMTP_TLS:-true}
+      AISS_SMTP_USER: ${AISS_SMTP_USER:-}
+      AISS_SMTP_PASSWORD: ${AISS_SMTP_PASSWORD:-}
+      AISS_SMTP_FROM: ${AISS_SMTP_FROM:-}
+      AISS_JUMPSERVER_URL: ${AISS_JUMPSERVER_URL:-}
+      AISS_JUMPSERVER_TOKEN: ${AISS_JUMPSERVER_TOKEN:-}
+      AISS_DECISION_LOG_PATH: /app/data/exports/decisions.jsonl
+      AISS_FEATURE_STORE_PATH: /app/data/exports/feature_store.json
+      AISS_BASELINES_PATH: /app/data/exports/user_baselines.json
+      AISS_USER_CONFIG_PATH: /app/data/exports/user_config.json
+      AISS_USERS_PATH: /app/data/exports/users.json
+      AISS_SESSIONS_PATH: /app/data/exports/sessions.json
+      AISS_INTEGRATION_STATE_PATH: /app/data/exports/integration_state.json
+      AISS_ML_MODEL_DIR: /app/data/models
+      MPLCONFIGDIR: /tmp/matplotlib
+      XDG_CACHE_HOME: /tmp
+    volumes:
+      - cybervault-data:/app/data/exports
+      - ../data/models:/app/data/models:ro
+    networks:
+      - analytics
+    depends_on:
+      redis:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${CYBERVAULT_BIND_ADDRESS:-127.0.0.1}:${CYBERVAULT_PORT:-8090}:8080"
+    networks:
+      - analytics
+    depends_on:
+      backend:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /var/cache/nginx:size=16m
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  analytics:
+    driver: bridge
+
+volumes:
+  cybervault-data:
+  cybervault-redis:

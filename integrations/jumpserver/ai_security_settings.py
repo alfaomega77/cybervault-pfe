@@ -1,0 +1,10 @@
+# CyberVault — expose config.yml AI_SECURITY_* to Django settings (Docker v4 overlay)
+from jumpserver.const import CONFIG
+
+AI_SECURITY_ENABLED = getattr(CONFIG, 'AI_SECURITY_ENABLED', False)
+AI_SECURITY_PUBLISHER = getattr(CONFIG, 'AI_SECURITY_PUBLISHER', 'file')
+AI_SECURITY_FILE_PATH = getattr(CONFIG, 'AI_SECURITY_FILE_PATH', 'data/ai_security/events.jsonl')
+AI_SECURITY_REDIS_CHANNEL = getattr(CONFIG, 'AI_SECURITY_REDIS_CHANNEL', 'fm.security_events')
+AI_SECURITY_WEBHOOK_URL = getattr(CONFIG, 'AI_SECURITY_WEBHOOK_URL', '')
+AI_SECURITY_WEBHOOK_TOKEN = getattr(CONFIG, 'AI_SECURITY_WEBHOOK_TOKEN', '')
+AI_SECURITY_WEBHOOK_TIMEOUT = getattr(CONFIG, 'AI_SECURITY_WEBHOOK_TIMEOUT', 3)

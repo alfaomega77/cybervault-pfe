@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Créer un compte — CyberVault</title>
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
+  <link rel="stylesheet" href="/static/css/auth.css?v=20260718">
+</head>
+<body class="auth-page">
+  <a class="skip-link" href="#signup-form">Aller au formulaire</a>
+  <div class="auth-split">
+    <aside class="auth-side" aria-hidden="true">
+      <div class="auth-logo">CyberVault</div>
+      <h1>Passez votre sécurité PAM au niveau supérieur</h1>
+      <ul class="auth-benefits">
+        <li>Détection IA en temps réel sur JumpServer</li>
+        <li>Intégration cloud via webhook HTTP</li>
+        <li>UEBA + ML + optimisation multi-objectifs</li>
+        <li>Mode dry-run pour valider sans couper de sessions</li>
+      </ul>
+      <div class="auth-trust">
+        <p>Conçu pour les équipes qui utilisent déjà JumpServer</p>
+        <div class="auth-logos">
+          <span>JumpServer</span>
+          <span>AWS</span>
+          <span>Azure</span>
+          <span>GCP</span>
+          <span>Docker</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="auth-form-side">
+      <div class="auth-form-wrap">
+        <a class="auth-back" href="/">← Retour à l’accueil</a>
+        <h2>Créer un compte</h2>
+        <p class="auth-sub">Le premier compte devient administrateur de l’instance.</p>
+        <div class="auth-error" id="signup-error" role="alert"></div>
+        <form id="signup-form">
+          <div class="auth-field">
+            <label for="cloud_provider">Environnement</label>
+            <select id="cloud_provider" name="cloud_provider" required>
+              <option value="aws">Amazon Web Services (AWS)</option>
+              <option value="azure">Microsoft Azure</option>
+              <option value="gcp">Google Cloud (GCP)</option>
+              <option value="hybrid">Hybride / Multi-cloud</option>
+              <option value="on_prem">On-premise</option>
+            </select>
+          </div>
+          <div class="auth-row">
+            <div class="auth-field">
+              <label for="first_name">Prénom</label>
+              <input type="text" id="first_name" name="first_name" required>
+            </div>
+            <div class="auth-field">
+              <label for="last_name">Nom</label>
+              <input type="text" id="last_name" name="last_name" required>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label for="company">Entreprise</label>
+            <input type="text" id="company" name="company" placeholder="Votre société" required>
+          </div>
+          <div class="auth-field">
+            <label for="email">Email professionnel</label>
+            <input type="email" id="email" name="email" placeholder="vous@entreprise.com" required>
+          </div>
+          <div class="auth-field">
+            <label for="password">Mot de passe</label>
+            <input type="password" id="password" name="password" minlength="12" autocomplete="new-password" required>
+            <small class="field-hint">12 caractères minimum.</small>
+          </div>
+          <div class="auth-field">
+            <label for="query">Votre besoin (optionnel)</label>
+            <textarea id="query" name="query" rows="3" placeholder="Ex. JumpServer sur AWS, 50 admins…"></textarea>
+          </div>
+          <button class="auth-btn" type="submit" id="signup-btn">Créer mon compte →</button>
+        </form>
+        <p class="auth-footer-link">
+          Déjà un compte ? <a href="/login.html">Se connecter</a>
+        </p>
+      </div>
+    </main>
+  </div>
+  <script src="/static/js/auth.js?v=20260718"></script>
+  <script>
+    document.getElementById('signup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAuthError('signup-error');
+      const btn = document.getElementById('signup-btn');
+      btn.disabled = true;
+      const form = Object.fromEntries(new FormData(e.target));
+      try {
+        await Auth.signup(form);
+        window.location.href = '/analyze.html';
+      } catch (err) {
+        showAuthError('signup-error', err.message);
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
