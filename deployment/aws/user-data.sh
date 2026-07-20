@@ -3,7 +3,7 @@
 set -euo pipefail
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "Re-run with sudo: sudo bash deploy/aws/user-data.sh"
+  echo "Re-run with sudo: sudo bash deployment/aws/user-data.sh"
   exit 1
 fi
 
@@ -21,4 +21,4 @@ fi
 mkdir -p /opt/cybervault
 echo "bootstrap ok $(date -Is)" | tee /opt/cybervault/bootstrap.log
 docker --version
-echo "Done. Log out/in if needed for docker group, then: bash deploy/aws/run-poc.sh"
+echo "Done. Log out/in if needed for docker group, then: bash deployment/aws/run-poc.sh"

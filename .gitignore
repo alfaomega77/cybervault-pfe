@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.public.example
 backend/.env
 deployment/.env
 
