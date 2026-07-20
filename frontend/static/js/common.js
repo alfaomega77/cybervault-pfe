@@ -102,6 +102,63 @@ function initAppShell() {
   });
 }
 
+function userInitials(user) {
+  const a = String(user?.first_name || '').trim().charAt(0);
+  const b = String(user?.last_name || '').trim().charAt(0);
+  const letters = `${a}${b}`.toUpperCase();
+  if (letters) return letters;
+  return String(user?.email || 'CV').slice(0, 2).toUpperCase();
+}
+
+function userDisplayName(user) {
+  const name = `${user?.first_name || ''} ${user?.last_name || ''}`.trim();
+  return name || user?.email || 'Mon profil';
+}
+
+function fillUserChip(user) {
+  if (!user) return;
+  const chip = document.querySelector('.user-chip');
+  if (!chip) return;
+
+  if (chip.tagName !== 'A') {
+    chip.style.cursor = 'pointer';
+    chip.addEventListener('click', () => {
+      window.location.href = '/profile.html';
+    }, { once: true });
+  }
+
+  let avatar = chip.querySelector('.avatar');
+  if (!avatar) return;
+  if (user.avatar) {
+    avatar.innerHTML = `<img src="${user.avatar}" alt="">`;
+    avatar.classList.add('has-photo');
+  } else {
+    avatar.classList.remove('has-photo');
+    avatar.textContent = userInitials(user);
+  }
+
+  const nameEl = chip.querySelector('.user-chip-name')
+    || avatar.nextElementSibling?.querySelector('div');
+  if (nameEl && nameEl.id !== 'user-greeting') {
+    nameEl.textContent = userDisplayName(user);
+  }
+
+  const greeting = document.getElementById('user-greeting');
+  if (greeting) {
+    greeting.textContent = user.company || user.email || '';
+  }
+}
+
+async function hydrateUserChip() {
+  if (typeof Auth === 'undefined' || !Auth.getToken?.()) return;
+  try {
+    const user = await Auth.me();
+    if (user) fillUserChip(user);
+  } catch {
+    /* ignore */
+  }
+}
+
 function animateCount(el, target, duration = 520) {
   if (!el) return;
   const end = Number(target);
@@ -127,7 +184,10 @@ function animateCount(el, target, duration = 520) {
   requestAnimationFrame(tick);
 }
 
-document.addEventListener('DOMContentLoaded', initAppShell);
+document.addEventListener('DOMContentLoaded', () => {
+  initAppShell();
+  hydrateUserChip();
+});
 
 function showToast(message, type = 'info') {
   let region = document.getElementById('toast-region');

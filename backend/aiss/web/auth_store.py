@@ -108,6 +108,7 @@ def signup_user(data: dict) -> dict:
         'company': (data.get('company') or '').strip(),
         'cloud_provider': data.get('cloud_provider') or 'aws',
         'query': (data.get('query') or '').strip(),
+        # Every registered CyberVault account is a full admin (SaaS self-serve).
         'role': 'admin',
         'password_hash': _hash_password(password),
         'created_at': _now().isoformat(),
@@ -125,6 +126,9 @@ def login_user(email: str, password: str) -> dict:
     user = next((u for u in store['users'] if u.get('email') == email), None)
     if not user or not _verify_password(password, user.get('password_hash', '')):
         raise ValueError('Email ou mot de passe incorrect')
+    if user.get('role') != 'admin':
+        user['role'] = 'admin'
+        _save_json(USERS_FILE, store)
     token = _create_session(user['id'])
     return {'user': _public_user(user), 'token': token}
 
@@ -284,5 +288,105 @@ def _public_user(user: dict) -> dict:
         'last_name': user.get('last_name'),
         'company': user.get('company'),
         'cloud_provider': user.get('cloud_provider'),
-        'role': user.get('role') or 'admin',
+        'role': 'admin',
+        'avatar': user.get('avatar') or '',
     }
+
+
+_AVATAR_RE = re.compile(
+    r'^data:image/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=\s]+$',
+    re.IGNORECASE,
+)
+MAX_AVATAR_CHARS = 180_000  # ~135 KB image after base64
+
+
+def _normalize_avatar(avatar: Optional[str]) -> str:
+    if avatar is None:
+        return ''
+    value = str(avatar).strip()
+    if not value:
+        return ''
+    if len(value) > MAX_AVATAR_CHARS:
+        raise ValueError('Photo trop volumineuse (max ~100 Ko). Compressez l’image.')
+    compact = re.sub(r'\s+', '', value)
+    if not _AVATAR_RE.fullmatch(compact):
+        raise ValueError('Format photo invalide (JPEG, PNG, WebP ou GIF).')
+    return compact
+
+
+@_synchronized
+def update_profile(user_id: str, data: dict) -> dict:
+    """Update display fields for the authenticated user."""
+    store = _load_json(USERS_FILE, {'users': []})
+    user = next((u for u in store['users'] if u.get('id') == user_id), None)
+    if not user:
+        raise ValueError('Compte introuvable')
+
+    if 'first_name' in data:
+        user['first_name'] = str(data.get('first_name') or '').strip()[:80]
+    if 'last_name' in data:
+        user['last_name'] = str(data.get('last_name') or '').strip()[:80]
+    if 'company' in data:
+        user['company'] = str(data.get('company') or '').strip()[:120]
+    if 'avatar' in data:
+        user['avatar'] = _normalize_avatar(data.get('avatar'))
+
+    # Role is never user-editable — every account stays full admin.
+    user['role'] = 'admin'
+
+    _save_json(USERS_FILE, store)
+    return _public_user(user)
+
+
+@_synchronized
+def change_password(user_id: str, current_password: str, new_password: str) -> dict:
+    if len(new_password or '') < 12 or len(new_password) > 256:
+        raise ValueError('Mot de passe : 12 caractères minimum')
+    store = _load_json(USERS_FILE, {'users': []})
+    user = next((u for u in store['users'] if u.get('id') == user_id), None)
+    if not user:
+        raise ValueError('Compte introuvable')
+    if not _verify_password(current_password or '', user.get('password_hash', '')):
+        raise ValueError('Mot de passe actuel incorrect')
+
+    user['password_hash'] = _hash_password(new_password)
+    _save_json(USERS_FILE, store)
+
+    # Drop other sessions; caller keeps its token until logout if desired —
+    # invalidate all for safety after password change.
+    sessions = _load_json(SESSIONS_FILE, {'sessions': {}})
+    sessions['sessions'] = {
+        k: v for k, v in sessions.get('sessions', {}).items()
+        if v.get('user_id') != user_id
+    }
+    _save_json(SESSIONS_FILE, sessions)
+    return {'ok': True, 'message': 'Mot de passe mis à jour. Reconnectez-vous.'}
+
+
+@_synchronized
+def delete_account(user_id: str, password: str) -> dict:
+    store = _load_json(USERS_FILE, {'users': []})
+    user = next((u for u in store['users'] if u.get('id') == user_id), None)
+    if not user:
+        raise ValueError('Compte introuvable')
+    if not _verify_password(password or '', user.get('password_hash', '')):
+        raise ValueError('Mot de passe incorrect')
+
+    store['users'] = [u for u in store['users'] if u.get('id') != user_id]
+    _save_json(USERS_FILE, store)
+
+    sessions = _load_json(SESSIONS_FILE, {'sessions': {}})
+    sessions['sessions'] = {
+        k: v for k, v in sessions.get('sessions', {}).items()
+        if v.get('user_id') != user_id
+    }
+    _save_json(SESSIONS_FILE, sessions)
+
+    resets = _load_json(RESETS_FILE, {'resets': {}})
+    resets['resets'] = {
+        k: v for k, v in resets.get('resets', {}).items()
+        if v.get('user_id') != user_id
+    }
+    _save_json(RESETS_FILE, resets)
+
+    return {'ok': True, 'message': 'Compte supprimé.'}

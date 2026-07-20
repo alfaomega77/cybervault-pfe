@@ -87,6 +87,30 @@ const Auth = {
     }
   },
 
+  async updateProfile(fields) {
+    return this.api('/api/auth/profile', {
+      method: 'POST',
+      body: JSON.stringify(fields),
+    });
+  },
+
+  async changePassword(currentPassword, newPassword) {
+    return this.api('/api/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+  },
+
+  async deleteAccount(password) {
+    return this.api('/api/auth/delete-account', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  },
+
   logout() {
     const token = this.getToken();
     if (token) {

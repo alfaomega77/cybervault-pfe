@@ -95,6 +95,71 @@ class AuthSecurityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             auth_store.reset_password(token, 'another-password-xx')
 
+    def test_update_profile_and_delete_account(self):
+        created = auth_store.signup_user({
+            'email': 'soc@example.com',
+            'password': 'correct-horse-battery',
+            'first_name': 'Ada',
+            'last_name': 'Lovelace',
+        })
+        user_id = created['user']['id']
+        tiny = (
+            'data:image/png;base64,'
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+        )
+        updated = auth_store.update_profile(user_id, {
+            'first_name': 'Grace',
+            'last_name': 'Hopper',
+            'company': 'Navy',
+            'avatar': tiny,
+        })
+        self.assertEqual(updated['first_name'], 'Grace')
+        self.assertEqual(updated['company'], 'Navy')
+        self.assertTrue(updated['avatar'].startswith('data:image/png;base64,'))
+
+        me = auth_store.get_user_by_token(created['token'])
+        self.assertEqual(me['first_name'], 'Grace')
+
+        with self.assertRaises(ValueError):
+            auth_store.delete_account(user_id, 'wrong-password-xx')
+        auth_store.delete_account(user_id, 'correct-horse-battery')
+        self.assertIsNone(auth_store.get_user_by_token(created['token']))
+        with self.assertRaises(ValueError):
+            auth_store.login_user('soc@example.com', 'correct-horse-battery')
+
+    def test_change_password_invalidates_sessions(self):
+        created = auth_store.signup_user({
+            'email': 'soc@example.com',
+            'password': 'correct-horse-battery',
+        })
+        token = created['token']
+        auth_store.change_password(
+            created['user']['id'],
+            'correct-horse-battery',
+            'brand-new-password',
+        )
+        self.assertIsNone(auth_store.get_user_by_token(token))
+        logged = auth_store.login_user('soc@example.com', 'brand-new-password')
+        self.assertTrue(logged['token'])
+
+
+    def test_signup_is_always_full_admin(self):
+        result = auth_store.signup_user({
+            'email': 'boss@example.com',
+            'password': 'correct-horse-battery',
+            'role': 'viewer',  # client must not be able to pick a weaker role
+        })
+        self.assertEqual(result['user']['role'], 'admin')
+        stored = json.loads(auth_store.USERS_FILE.read_text(encoding='utf-8'))['users'][0]
+        self.assertEqual(stored['role'], 'admin')
+        # Simulate a legacy non-admin row — login upgrades it.
+        stored['role'] = 'user'
+        auth_store._save_json(auth_store.USERS_FILE, {'users': [stored]})
+        logged = auth_store.login_user('boss@example.com', 'correct-horse-battery')
+        self.assertEqual(logged['user']['role'], 'admin')
+        again = json.loads(auth_store.USERS_FILE.read_text(encoding='utf-8'))['users'][0]
+        self.assertEqual(again['role'], 'admin')
+
 
 class EmailOnlyNotificationTests(unittest.TestCase):
     def setUp(self):

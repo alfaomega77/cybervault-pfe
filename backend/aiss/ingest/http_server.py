@@ -16,12 +16,15 @@ from urllib.parse import parse_qs, urlparse
 from ..config import settings
 from ..pipeline.processor import EventProcessor
 from ..web.auth_store import (
+    change_password,
+    delete_account,
     get_user_by_token,
     login_user,
     logout_user,
     request_password_reset,
     reset_password,
     signup_user,
+    update_profile,
 )
 from ..web.config_store import (
     apply_default_onboarding,
@@ -555,6 +558,50 @@ class IngestHandler(BaseHTTPRequestHandler):
         if path == '/api/auth/logout':
             logout_user(_bearer_token(self) or '')
             _json_response(self, 200, {'ok': True})
+            return
+
+        if path == '/api/auth/profile':
+            user = get_user_by_token(_bearer_token(self))
+            if not user:
+                _json_response(self, 401, {'ok': False, 'error': 'Connectez-vous'})
+                return
+            try:
+                body = _read_json_body(self)
+                updated = update_profile(user['id'], body)
+                _json_response(self, 200, {'ok': True, 'user': updated})
+            except (json.JSONDecodeError, ValueError, RequestTooLarge) as exc:
+                _json_response(self, 400, {'ok': False, 'error': str(exc)})
+            return
+
+        if path == '/api/auth/password':
+            user = get_user_by_token(_bearer_token(self))
+            if not user:
+                _json_response(self, 401, {'ok': False, 'error': 'Connectez-vous'})
+                return
+            try:
+                body = _read_json_body(self)
+                result = change_password(
+                    user['id'],
+                    body.get('current_password', ''),
+                    body.get('new_password', ''),
+                )
+                _json_response(self, 200, result)
+            except (json.JSONDecodeError, ValueError, RequestTooLarge) as exc:
+                _json_response(self, 400, {'ok': False, 'error': str(exc)})
+            return
+
+        if path == '/api/auth/delete-account':
+            user = get_user_by_token(_bearer_token(self))
+            if not user:
+                _json_response(self, 401, {'ok': False, 'error': 'Connectez-vous'})
+                return
+            try:
+                body = _read_json_body(self)
+                result = delete_account(user['id'], body.get('password', ''))
+                logout_user(_bearer_token(self) or '')
+                _json_response(self, 200, result)
+            except (json.JSONDecodeError, ValueError, RequestTooLarge) as exc:
+                _json_response(self, 400, {'ok': False, 'error': str(exc)})
             return
 
         if path == '/api/integration/connect':

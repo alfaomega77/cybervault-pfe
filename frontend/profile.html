@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Gérer votre profil CyberVault">
+  <title>Profil — CyberVault</title>
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260720p">
+  <link rel="stylesheet" href="/static/css/auth.css?v=20260720p">
+  <style>
+    .profile-layout { display: grid; gap: 1.25rem; max-width: 640px; margin: 0 auto; }
+    .profile-layout .card { text-align: left; }
+    .profile-avatar-row {
+      display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;
+    }
+    .profile-avatar-preview {
+      width: 72px; height: 72px; border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 1.1rem; font-weight: 700; color: #fff;
+      background: linear-gradient(135deg, #2563eb, #0d9488);
+      overflow: hidden; flex-shrink: 0;
+    }
+    .profile-avatar-preview img {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+    .profile-danger {
+      border-color: rgba(220, 38, 38, 0.28);
+      background: rgba(220, 38, 38, 0.04);
+    }
+    .profile-status { font-size: 0.85rem; color: var(--muted); min-height: 1.2em; margin-top: 0.5rem; }
+    .profile-status.ok { color: #0f766e; }
+    .profile-status.err { color: #b91c1c; }
+  </style>
+</head>
+<body class="integrate-page" data-page="profile">
+  <a class="skip-link" href="#main-content">Aller au contenu</a>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
+  <div class="app-shell">
+    <aside class="app-sidebar" id="app-sidebar" aria-label="Navigation">
+      <a class="brand" href="/">
+        <div class="brand-badge" aria-hidden="true">CV</div>
+        <span>CyberVault</span>
+      </a>
+      <nav class="side-nav">
+        <a href="/analyze.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Mon espace
+        </a>
+        <a href="/analyze.html?mode=simulate">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Tester
+        </a>
+        <a href="/integrate.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Mon PAM
+        </a>
+        <a href="/comportements.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Comportements
+        </a>
+        <a href="/app.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Décisions
+        </a>
+        <a href="/profile.html" class="active" aria-current="page">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Profil
+        </a>
+      </nav>
+      <div class="side-footer">
+        <a class="user-chip" href="/profile.html" id="user-chip-link">
+          <div class="avatar" id="chip-avatar" aria-hidden="true">CV</div>
+          <div>
+            <div class="user-chip-name" id="chip-name">Mon profil</div>
+            <div id="user-greeting" style="font-size:0.75rem;color:var(--muted);"></div>
+          </div>
+        </a>
+        <div class="mode-switch" id="mode-switch" hidden>
+          <div class="mode-switch-label">Mode</div>
+          <div class="mode-switch-btns" role="group" aria-label="Mode d’action">
+            <button type="button" class="mode-btn active" data-mode="test" id="mode-btn-test">Test</button>
+            <button type="button" class="mode-btn" data-mode="live" id="mode-btn-live">Live</button>
+          </div>
+          <p class="mode-switch-hint" id="mode-switch-hint">Dry-run — pas de kill réel</p>
+        </div>
+        <a href="#" id="btn-logout" class="btn btn-secondary" style="width:100%;min-height:38px;font-size:0.85rem;">Déconnexion</a>
+      </div>
+    </aside>
+
+    <div class="app-main-wrap">
+      <div class="app-topbar">
+        <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Ouvrir le menu" aria-controls="app-sidebar" aria-expanded="false">☰</button>
+        <strong>Profil</strong>
+      </div>
+
+      <main class="app-main" id="main-content">
+        <div class="profile-layout">
+          <section class="card connect-simple">
+            <h1 style="margin-bottom:0.35rem;">Mon profil</h1>
+            <p class="connect-lead" style="text-align:left;margin:0 0 1rem;">
+              Modifiez votre nom, votre photo et votre entreprise.
+            </p>
+
+            <div class="profile-avatar-row">
+              <div class="profile-avatar-preview" id="avatar-preview" aria-hidden="true">CV</div>
+              <div>
+                <label class="btn btn-secondary" style="display:inline-flex;cursor:pointer;min-height:38px;align-items:center;">
+                  Changer la photo
+                  <input type="file" id="avatar-input" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+                </label>
+                <button type="button" class="btn btn-secondary" id="btn-remove-avatar" style="min-height:38px;margin-left:0.35rem;">Retirer</button>
+                <p class="field-hint" style="margin-top:0.4rem;">JPEG / PNG / WebP — max ~100 Ko</p>
+              </div>
+            </div>
+
+            <form id="profile-form" class="connect-form">
+              <div class="auth-field">
+                <label for="email">Email</label>
+                <input type="email" id="email" disabled>
+              </div>
+              <div class="auth-field">
+                <label for="first_name">Prénom</label>
+                <input type="text" id="first_name" maxlength="80" autocomplete="given-name">
+              </div>
+              <div class="auth-field">
+                <label for="last_name">Nom</label>
+                <input type="text" id="last_name" maxlength="80" autocomplete="family-name">
+              </div>
+              <div class="auth-field">
+                <label for="company">Entreprise</label>
+                <input type="text" id="company" maxlength="120" autocomplete="organization">
+              </div>
+              <button class="connect-btn" type="submit" id="btn-save-profile">Enregistrer</button>
+              <p class="profile-status" id="profile-status" aria-live="polite"></p>
+            </form>
+          </section>
+
+          <section class="card connect-simple">
+            <h2 style="margin:0 0 0.75rem;font-size:1.1rem;">Mot de passe</h2>
+            <form id="password-form" class="connect-form">
+              <div class="auth-field">
+                <label for="current_password">Mot de passe actuel</label>
+                <input type="password" id="current_password" autocomplete="current-password" required>
+              </div>
+              <div class="auth-field">
+                <label for="new_password">Nouveau mot de passe</label>
+                <input type="password" id="new_password" autocomplete="new-password" required minlength="12">
+                <small class="field-hint">12 caractères minimum</small>
+              </div>
+              <button class="btn btn-secondary" type="submit" id="btn-save-password" style="width:100%;min-height:42px;">Changer le mot de passe</button>
+              <p class="profile-status" id="password-status" aria-live="polite"></p>
+            </form>
+          </section>
+
+          <section class="card connect-simple profile-danger">
+            <h2 style="margin:0 0 0.35rem;font-size:1.1rem;color:#b91c1c;">Supprimer le compte</h2>
+            <p class="connect-lead" style="text-align:left;margin:0 0 1rem;">
+              Action définitive. Vos identifiants et sessions seront effacés.
+            </p>
+            <form id="delete-form" class="connect-form">
+              <div class="auth-field">
+                <label for="delete_password">Confirmez avec votre mot de passe</label>
+                <input type="password" id="delete_password" autocomplete="current-password" required>
+              </div>
+              <button class="btn btn-danger" type="submit" id="btn-delete" style="width:100%;min-height:42px;">Supprimer mon compte</button>
+              <p class="profile-status" id="delete-status" aria-live="polite"></p>
+            </form>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/js/auth.js?v=20260720p"></script>
+  <script src="/static/js/common.js?v=20260720p"></script>
+  <script src="/static/js/profile.js?v=20260720p"></script>
+</body>
+</html>
