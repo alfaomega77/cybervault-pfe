@@ -125,6 +125,8 @@ function fillUserChip(user) {
     chip.addEventListener('click', () => {
       window.location.href = '/profile.html';
     }, { once: true });
+  } else {
+    chip.setAttribute('href', '/profile.html');
   }
 
   let avatar = chip.querySelector('.avatar');
@@ -137,16 +139,36 @@ function fillUserChip(user) {
     avatar.textContent = userInitials(user);
   }
 
-  const nameEl = chip.querySelector('.user-chip-name')
-    || avatar.nextElementSibling?.querySelector('div');
-  if (nameEl && nameEl.id !== 'user-greeting') {
-    nameEl.textContent = userDisplayName(user);
+  let meta = avatar.nextElementSibling;
+  if (!meta) {
+    meta = document.createElement('div');
+    avatar.after(meta);
   }
 
-  const greeting = document.getElementById('user-greeting');
-  if (greeting) {
-    greeting.textContent = user.company || user.email || '';
+  let nameEl = meta.querySelector('.user-chip-name');
+  if (!nameEl) {
+    nameEl = document.createElement('div');
+    nameEl.className = 'user-chip-name';
+    meta.prepend(nameEl);
   }
+  nameEl.textContent = userDisplayName(user);
+
+  let roleEl = meta.querySelector('.user-chip-role');
+  if (!roleEl) {
+    roleEl = document.createElement('div');
+    roleEl.className = 'user-chip-role';
+    nameEl.after(roleEl);
+  }
+  roleEl.textContent = (user.role || 'admin').toLowerCase() === 'admin' ? 'Admin' : (user.role || 'Admin');
+
+  let greeting = meta.querySelector('#user-greeting') || document.getElementById('user-greeting');
+  if (!greeting) {
+    greeting = document.createElement('div');
+    greeting.id = 'user-greeting';
+    greeting.style.cssText = 'font-size:0.75rem;color:var(--muted);';
+    roleEl.after(greeting);
+  }
+  greeting.textContent = user.email || user.company || '';
 }
 
 async function hydrateUserChip() {

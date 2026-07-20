@@ -231,6 +231,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (isGuest) {
     applyGuestChrome();
+    const chip = document.querySelector('.user-chip');
+    if (chip) {
+      chip.querySelector('.user-chip-name') && (chip.querySelector('.user-chip-name').textContent = 'Invité');
+      const role = chip.querySelector('.user-chip-role');
+      if (role) role.textContent = 'Guest';
+      const greet = document.getElementById('user-greeting');
+      if (greet) greet.textContent = 'Créez un compte';
+    }
   } else {
     document.getElementById('btn-logout')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -239,6 +247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const me = isGuest ? null : await Auth.me();
+  if (me && typeof fillUserChip === 'function') fillUserChip(me);
   if (me?.email) {
     const emailInput = document.getElementById('sim-alert-email');
     if (emailInput && !emailInput.value) emailInput.value = me.email;

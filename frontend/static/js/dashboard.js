@@ -271,10 +271,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!Auth.requireAuth('/login.html')) return;
 
   Auth.me().then((user) => {
-    const greet = document.getElementById('user-greeting');
-    if (greet && user) {
-      greet.textContent = user.email || user.company || '';
-    }
+    if (user && typeof fillUserChip === 'function') fillUserChip(user);
   });
 
   document.getElementById('btn-logout')?.addEventListener('click', (e) => {

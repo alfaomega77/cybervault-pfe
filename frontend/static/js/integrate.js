@@ -123,10 +123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!Auth.requireAuth()) return;
 
   const user = await Auth.me();
-  if (user) {
-    document.getElementById('user-greeting').textContent =
-      ((user.first_name || '') + ' ' + (user.company || user.email)).trim();
-  }
+  if (user && typeof fillUserChip === 'function') fillUserChip(user);
 
   document.getElementById('btn-logout')?.addEventListener('click', (e) => {
     e.preventDefault();

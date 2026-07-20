@@ -159,8 +159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   Auth.requireAuth();
   try {
     const me = await Auth.me();
-    const g = document.getElementById('user-greeting');
-    if (g && me) g.textContent = me.email || me.first_name || '';
+    if (me && typeof fillUserChip === 'function') fillUserChip(me);
   } catch (_) { /* ignore */ }
 
   document.getElementById('btn-logout')?.addEventListener('click', (e) => {
