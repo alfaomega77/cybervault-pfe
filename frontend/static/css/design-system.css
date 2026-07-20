@@ -464,14 +464,17 @@ code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  padding: 0.55rem 0.5rem;
+  padding: 0.55rem 0.65rem;
   color: var(--text-secondary);
   font-size: 0.82rem;
   min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   text-decoration: none;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface);
+  min-height: 38px;
 }
 a.user-chip:hover {
   background: var(--surface-2, rgba(0,0,0,0.04));

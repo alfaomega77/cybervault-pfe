@@ -191,11 +191,19 @@ function renderSimulation(data) {
 }
 
 function applyGuestChrome() {
-  const logout = document.getElementById('btn-logout');
-  if (logout) {
-    logout.textContent = 'Créer un compte';
-    logout.setAttribute('href', '/signup.html?next=%2Fanalyze.html%3Fmode%3Dsimulate');
-    logout.onclick = null;
+  const chip = document.querySelector('.user-chip');
+  if (chip) {
+    chip.setAttribute('href', '/signup.html?next=%2Fanalyze.html%3Fmode%3Dsimulate');
+    chip.setAttribute('title', 'Créer un compte');
+    const name = chip.querySelector('.user-chip-name');
+    if (name) name.textContent = 'Créer un compte';
+    const role = chip.querySelector('.user-chip-role');
+    if (role) role.textContent = 'Invité';
+    const avatar = chip.querySelector('.avatar');
+    if (avatar) {
+      avatar.classList.remove('has-photo');
+      avatar.textContent = '?';
+    }
   }
   document.getElementById('guest-banner')?.classList.remove('hidden');
 }
@@ -231,19 +239,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (isGuest) {
     applyGuestChrome();
-    const chip = document.querySelector('.user-chip');
-    if (chip) {
-      chip.querySelector('.user-chip-name') && (chip.querySelector('.user-chip-name').textContent = 'Invité');
-      const role = chip.querySelector('.user-chip-role');
-      if (role) role.textContent = 'Guest';
-      const greet = document.getElementById('user-greeting');
-      if (greet) greet.textContent = 'Créez un compte';
-    }
-  } else {
-    document.getElementById('btn-logout')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      Auth.logout();
-    });
   }
 
   const me = isGuest ? null : await Auth.me();

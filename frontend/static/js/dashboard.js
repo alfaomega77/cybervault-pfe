@@ -274,11 +274,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (user && typeof fillUserChip === 'function') fillUserChip(user);
   });
 
-  document.getElementById('btn-logout')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    Auth.logout();
-  });
-
   document.getElementById('btn-stop-pam')?.addEventListener('click', async () => {
     if (!await confirmAction('Arrêter la surveillance temps réel ?', 'Arrêter')) return;
     try {

@@ -162,10 +162,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (me && typeof fillUserChip === 'function') fillUserChip(me);
   } catch (_) { /* ignore */ }
 
-  document.getElementById('btn-logout')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    Auth.logout();
-  });
   document.getElementById('rule_type')?.addEventListener('change', updatePatternHints);
   document.getElementById('rule-form')?.addEventListener('submit', createRule);
   updatePatternHints();

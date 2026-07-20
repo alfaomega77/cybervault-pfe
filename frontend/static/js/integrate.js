@@ -125,11 +125,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const user = await Auth.me();
   if (user && typeof fillUserChip === 'function') fillUserChip(user);
 
-  document.getElementById('btn-logout')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    Auth.logout();
-  });
-
   let cfg = {};
   try {
     cfg = await Auth.api('/api/config');

@@ -65,6 +65,10 @@
       e.preventDefault();
       Auth.logout();
     });
+    document.getElementById('btn-logout-main')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      Auth.logout();
+    });
 
     currentUser = await Auth.me();
     if (!currentUser) {

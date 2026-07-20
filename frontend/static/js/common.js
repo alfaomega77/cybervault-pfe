@@ -161,14 +161,8 @@ function fillUserChip(user) {
   }
   roleEl.textContent = (user.role || 'admin').toLowerCase() === 'admin' ? 'Admin' : (user.role || 'Admin');
 
-  let greeting = meta.querySelector('#user-greeting') || document.getElementById('user-greeting');
-  if (!greeting) {
-    greeting = document.createElement('div');
-    greeting.id = 'user-greeting';
-    greeting.style.cssText = 'font-size:0.75rem;color:var(--muted);';
-    roleEl.after(greeting);
-  }
-  greeting.textContent = user.email || user.company || '';
+  // Never show email in the sidebar chip.
+  meta.querySelector('#user-greeting')?.remove();
 }
 
 async function hydrateUserChip() {

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Définir des comportements anormaux CyberVault">
   <title>Comportements — CyberVault</title>
-  <link rel="stylesheet" href="/static/css/design-system.css?v=20260720chip">
-  <link rel="stylesheet" href="/static/css/auth.css?v=20260720chip">
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260720live">
+  <link rel="stylesheet" href="/static/css/auth.css?v=20260720live">
   <style>
     .rules-layout { display: grid; gap: 1.25rem; max-width: 720px; margin: 0 auto; }
     .rule-card {
@@ -73,14 +73,6 @@
         </a>
       </nav>
       <div class="side-footer">
-        <a class="user-chip" href="/profile.html" title="Mon profil">
-          <div class="avatar" aria-hidden="true">CV</div>
-          <div>
-            <div class="user-chip-name">Mon profil</div>
-            <div class="user-chip-role">Admin</div>
-            <div id="user-greeting" style="font-size:0.75rem;color:var(--muted);"></div>
-          </div>
-        </a>
         <div class="mode-switch" id="mode-switch" hidden>
           <div class="mode-switch-label">Mode</div>
           <div class="mode-switch-btns" role="group" aria-label="Mode d’action">
@@ -89,7 +81,13 @@
           </div>
           <p class="mode-switch-hint" id="mode-switch-hint">Dry-run — pas de kill réel</p>
         </div>
-        <a href="#" id="btn-logout" class="btn btn-secondary" style="width:100%;min-height:38px;font-size:0.85rem;">Déconnexion</a>
+        <a class="user-chip" href="/profile.html" title="Mon profil">
+          <div class="avatar" aria-hidden="true">CV</div>
+          <div>
+            <div class="user-chip-name">Mon profil</div>
+            <div class="user-chip-role">Admin</div>
+          </div>
+        </a>
       </div>
     </aside>
 
@@ -150,8 +148,8 @@
     </div>
   </div>
 
-  <script src="/static/js/auth.js?v=20260720chip"></script>
-  <script src="/static/js/common.js?v=20260720chip"></script>
-  <script src="/static/js/comportements.js?v=20260720a"></script>
+  <script src="/static/js/auth.js?v=20260720live"></script>
+  <script src="/static/js/common.js?v=20260720live"></script>
+  <script src="/static/js/comportements.js?v=20260720live"></script>
 </body>
 </html>
