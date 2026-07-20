@@ -49,6 +49,10 @@ class Settings:
         'AISS_INTEGRATION_STATE_PATH',
         str(BASE_DIR / 'data' / 'integration_state.json'),
     )
+    behavior_rules_path: str = os.getenv(
+        'AISS_BEHAVIOR_RULES_PATH',
+        str(BASE_DIR / 'data' / 'behavior_rules.json'),
+    )
 
 
 from typing import Optional

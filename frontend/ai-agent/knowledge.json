@@ -1,0 +1,233 @@
+{
+  "agent": {
+    "name": "Ava",
+    "title": "Assistante CyberVault",
+    "greeting": "Salam / Bonjour — je suis Ava. Pose-moi des questions sur CyberVault : produit, code, pipeline ML/IA, UEBA, dry-run, APIs… (FR ou darija). Ach bghiti t3raf?",
+    "suggestions": [
+      "Comment marche le pipeline IA ?",
+      "C'est quoi EventProcessor ?",
+      "Comment entraîner les modèles ML ?",
+      "Où est le code UEBA ?"
+    ]
+  },
+  "entries": [
+    {
+      "id": "what-is",
+      "keywords": [
+        "cybervault", "c'est quoi", "qu'est-ce", "presentation", "produit", "solution", "app", "application", "what is",
+        "chno", "chnou", "achno", "ashno", "chnou howa", "chno howa", "fhamni", "chrah", "chrh", "شنو", "أشنو", "شنو هو"
+      ],
+      "answer": "CyberVault est une couche PAM Risk Intelligence au-dessus de JumpServer. Code principal : backend/aiss/ (pipeline IA) + frontend/ (UI). Elle score chaque événement privilégié (règles + UEBA + ML) puis décide : journal, alerte, lock ou kill — dry-run par défaut.",
+      "answer_darija": "CyberVault hiya couche PAM Risk Intelligence foug JumpServer. Code: backend/aiss/ (pipeline IA) + frontend/. Katscori kol event (règles + UEBA + ML) o katqarrer: journal, alerte, lock wla kill — dry-run b défaut."
+    },
+    {
+      "id": "architecture-code",
+      "keywords": [
+        "architecture", "code", "structure", "dossier", "folder", "backend", "frontend", "où est", "where is",
+        "organisation", "repo", "codebase", "aiss", "layout", "كيفاش منظم", "فين الكود", "structure code"
+      ],
+      "answer": "Repo : backend/aiss/ = cerveau IA ; frontend/ = UI nginx ; integrations/jumpserver/ = plugin PAM ; data/models/ = artefacts ML. Sous aiss/ : pipeline/ (EventProcessor), ingest/ (HTTP+API), actions/ (JumpServer), features/, notifications/, explainability/, evaluation/ (train), web/ (auth, demo, agent).",
+      "answer_darija": "Repo: backend/aiss/ = IA ; frontend/ = UI ; integrations/jumpserver/ = plugin ; data/models/ = modèles. F aiss/: pipeline/, ingest/, actions/, features/, notifications/, evaluation/ (train), web/."
+    },
+    {
+      "id": "pipeline-flow",
+      "keywords": [
+        "pipeline", "flux", "flow", "comment marche", "comment fonctionne", "processus", "eventprocessor",
+        "eventprocessor", "event processor", "processor.py", "process()",
+        "comment marche le pipeline", "pipeline ia", "pipeline ml"
+      ],
+      "answer": "Flux dans EventProcessor.process() (backend/aiss/pipeline/processor.py) : 1) enrichissement FeatureStore 2) scores parallèles Rules + UEBA + ML (+ DL optionnel) 3) combine_assessments() = max des risk_score 4) MOOSolver.decide() choisit l’action 5) ActionExecutor.execute() log + email (+ lock/kill si pas dry-run). Entrées : POST /events, Redis, demo-live, ou analyze/replay.",
+      "answer_darija": "F EventProcessor.process(): 1) FeatureStore.enrich 2) Rules+UEBA+ML(+DL) 3) combine = max risk 4) MOOSolver.decide 5) ActionExecutor (log/email/lock/kill). Events kayjiw men /events, Redis, demo-live wla analyze/replay."
+    },
+    {
+      "id": "engines",
+      "keywords": [
+        "moteurs", "detection", "ensemble", "hybrid", "hybride", "règles", "rules", "ueba", "behavioral",
+        "ml engine", "machine learning", "isolation forest", "random forest", "score risque", "كيفاش كاتحسب", "خطر", "ذكاء اصطناعي"
+      ],
+      "answer": "3+ moteurs dans pipeline/ : RulesEngine (regex destructives, ACL, vélocité) ; BehavioralEngine UEBA (baselines user : heure, IP, asset, burst) ; MLEngine = IsolationForest + RandomForest (blend RF 0.6). Optionnel : SequenceDLEngine (LSTM/Transformer) et GNNEngine si .pt présents. Fusion : max des scores → label ensemble_v1.",
+      "answer_darija": "Moteurs: RulesEngine (commands khatira, ACL) ; BehavioralEngine UEBA (baselines user) ; MLEngine = IsolationForest + RandomForest. Optionnel: Sequence DL + GNN. Fusion = max dyal scores."
+    },
+    {
+      "id": "rules-engine",
+      "keywords": [
+        "rulesengine", "rules engine", "règle déterministe", "destructive", "regex", "acl_violation",
+        "enrichment.py", "rules_v0"
+      ],
+      "answer": "RulesEngine (pipeline/enrichment.py) : patterns destructifs (rm -rf, etc.), command.acl_violation (score ~0.85), vélocité session >30, risk_level ACL. Sortie déterministe, pas de modèle entraîné. Fichier politique : backend/config/default_policy.yaml.",
+      "answer_darija": "RulesEngine f enrichment.py: patterns destructifs, ACL violation, vélocité. Bla modèle ML — règles fixes. Policy: default_policy.yaml."
+    },
+    {
+      "id": "ueba",
+      "keywords": [
+        "ueba", "behavioral", "baseline", "comportement", "behavioralengine", "baselines",
+        "ueba", "behavioral.py", "behavioralengine", "code ueba", "où est ueba", "ou est ueba",
+        "baseline store", "userbaseline", "heure atypique", "nouvel ip", "lateral", "فين ueba"
+      ],
+      "answer": "UEBA = BehavioralEngine (pipeline/behavioral.py). BaselineStore par user_id (AISS_BASELINES_PATH) : heure inhabituelle, nouvel asset/compte/IP, login fail burst, vélocité vs baseline, lateral movement. Warm-up si trop peu d’events. learn() met à jour la baseline si risque combiné ≤ 0.40.",
+      "answer_darija": "UEBA = BehavioralEngine f behavioral.py. BaselineStore b user: sa3a ghariba, IP/asset jdid, burst fail, vélocité. Katlearn ila risk ≤ 0.40."
+    },
+    {
+      "id": "ml-models",
+      "keywords": [
+        "ml", "modèle", "model", "isolationforest", "randomforest", "sklearn", "ml_engine",
+        "pkl", "hybrid if", "features", "vecteur", "feature vector", "mlengine", "entraîner ml"
+      ],
+      "answer": "MLEngine (pipeline/ml_engine.py) charge depuis AISS_ML_MODEL_DIR : isolation_forest.pkl, random_forest.pkl, if_calibration.pkl, background_matrix.npy. Features : extract_feature_vector() dans features/extractor.py (12 dims : hour_norm, destructive_command, is_new_asset…). Sans .pkl → score 0 (ml_not_trained).",
+      "answer_darija": "MLEngine f ml_engine.py: IsolationForest + RandomForest men data/models (.pkl). Features 12 dims f extractor.py. Bla modèles → score 0."
+    },
+    {
+      "id": "deep-learning",
+      "keywords": [
+        "deep learning", "dl", "lstm", "transformer", "gnn", "pytorch", "sequence_dl",
+        "gnn_dl", "torch", "réseau de neurones", "sequence engine"
+      ],
+      "answer": "DL optionnel (PyTorch) : SequenceDLEngine (dl_sequence.py) — LSTM/Transformer sur l’historique de commandes de session (sequence_dl.pt) ; GNNEngine (dl_gnn.py) — graphe user–asset–IP (gnn_dl.pt). Install via requirements-deep-learning.txt / INSTALL_DEEP_LEARNING. Absents → score 0.",
+      "answer_darija": "DL optionnel: SequenceDL (LSTM/Transformer) + GNN. Fichiers sequence_dl.pt / gnn_dl.pt. Ila ma kayninch → désactivé."
+    },
+    {
+      "id": "train-models",
+      "keywords": [
+        "train", "entraîner", "entrainer", "training", "train_models", "dataset", "label",
+        "train_models", "train models", "entraîner les modèles", "entrainer les modeles",
+        "comment entraîner", "comment entrainer", "retrain", "fine tune", "كيفاش نتريني", "تدريب"
+      ],
+      "answer": "Entraînement : python -m aiss.evaluation.train_models --data events.jsonl [--model-dir …]. JSONL avec label 0/1 requis. Sauve IF/RF (+ DL si dispo). DL seul : python -m aiss.evaluation.train_dl [--architecture lstm|transformer]. Benchmark : aiss.evaluation.benchmark. Puis redémarrer le backend pour recharger AISS_ML_MODEL_DIR.",
+      "answer_darija": "Train: python -m aiss.evaluation.train_models --data events.jsonl (label 0/1). DL: train_dl. Men be3d 3awed start backend bach ycharger modèles."
+    },
+    {
+      "id": "moo-decision",
+      "keywords": [
+        "moo", "multi-objectif", "multi objective", "decide", "action", "kill_session",
+        "lock_session", "alert_analyst", "moo_solver", "seuils", "threshold"
+      ],
+      "answer": "MOOSolver (pipeline/moo_solver.py) choisit l’action après le score : NO_ACTION, LOG_ONLY, ALERT_ANALYST, CREATE_TICKET, LOCK_SESSION, KILL_SESSION. Équilibre sécurité / disruption / fatigue d’alertes (poids dans default_policy.yaml). PrivilegeMOOSolver gère le niveau de privilège. Contraintes : protected_accounts, min_confidence_for_kill.",
+      "answer_darija": "MOOSolver kaykhtar action: log, alerte, lock, kill… b équilibre sécurité vs disruption. Config f default_policy.yaml."
+    },
+    {
+      "id": "explainability",
+      "keywords": [
+        "xai", "explainable", "explainable ai", "explainability", "shap", "lime",
+        "explainer", "modelExplainer", "explication", "expliquer le score", "pourquoi ce score",
+        "khdemto b xai", "khdem b xai", "b xai", "wash kayn xai", "wash fiha xai",
+        "تفسير", "شرح السكور", "explainer.py"
+      ],
+      "answer": "Oui — CyberVault utilise de l’XAI (Explainable AI). Module : backend/aiss/explainability/explainer.py (ModelExplainer) avec SHAP/LIME pour expliquer les scores ML au SOC. En plus, les décisions journalisent les raisons des règles et de l’UEBA (pas une boîte noire).",
+      "answer_darija": "Ah — CyberVault khddam b XAI (Explainable AI). Code: backend/aiss/explainability/explainer.py (ModelExplainer) b SHAP/LIME bach ychreh score ML l SOC. Zayd 3liha: décisions kaybiynu raisons dyal règles + UEBA — maši black box."
+    },
+    {
+      "id": "ingest-api",
+      "keywords": [
+        "api", "endpoint", "webhook", "/events", "redis", "ingest", "http_server",
+        "consumer", "poster event", "token webhook"
+      ],
+      "answer": "Ingest live : POST /events avec Bearer AISS_WEBHOOK_TOKEN (ingest/http_server.py). Aussi Redis (AISS_REDIS_CHANNEL) via consumer/main.py. UI : POST /api/integration/demo-live (PoC 3 sessions), POST /api/analyze/replay (batch logs, auth). Health : GET /health.",
+      "answer_darija": "Events: POST /events + token. Redis channel. UI: demo-live o analyze/replay. Health: /health."
+    },
+    {
+      "id": "frontend-code",
+      "keywords": [
+        "frontend", "javascript", "html", "ui", "dashboard.js", "analyze.js", "landing",
+        "nginx", "static", "page"
+      ],
+      "answer": "Frontend statique (nginx) : index.html (landing + Ava), analyze.html/js (simulation + batch), app.html + dashboard.js (décisions), integrate.html/js (Mon PAM), auth.js. Agent : frontend/ai-agent/. Appels API via Auth.api() → proxy nginx /api → backend.",
+      "answer_darija": "Frontend: index, analyze, app (décisions), integrate (PAM), ai-agent/. JS kaycalli /api via nginx."
+    },
+    {
+      "id": "dry-run",
+      "keywords": [
+        "dry-run", "dry run", "dryrun", "mode test", "actionexecutor", "would execute",
+        "kayqta3", "kat9ta3", "دراي ران", "واش كايقطع"
+      ],
+      "answer": "AISS_DRY_RUN (souvent true) force dry-run dans ActionExecutor : les actions LOCK/KILL sont journalisées (would execute…) sans appeler JumpServer. Hors dry-run + URL/token JS : JumpServerClient.lock_session / kill_sessions (API terminal tasks).",
+      "answer_darija": "Dry-run: décisions kaytloggiw bla ma y9t3o session. Barrra dry-run + token → JumpServer lock/kill 7a9i9i."
+    },
+    {
+      "id": "jumpserver",
+      "keywords": [
+        "jumpserver", "pam", "connecter", "intégration", "webhook", "bastion", "mon pam",
+        "nconnecti", "plugin", "integrations"
+      ],
+      "answer": "Intégration : webhook JumpServer → POST /events. Plugin Django sous integrations/jumpserver/. UI Mon PAM : URL + token + alertes. Actions lock/kill via AISS_JUMPSERVER_URL + TOKEN (ou config UI) seulement hors dry-run.",
+      "answer_darija": "JumpServer → webhook /events. Plugin f integrations/jumpserver/. Mon PAM: URL+token. Lock/kill ghir barra dry-run."
+    },
+    {
+      "id": "email",
+      "keywords": [
+        "email", "smtp", "alerte", "notification", "mail", "alerter", "notifier",
+        "kayssift", "إيميل", "تنبيه"
+      ],
+      "answer": "Alertes email : notifications/alerter.py (get_notifier, is_security_alert). Config AISS_SMTP_HOST/USER/PASSWORD/FROM. Déclenchées selon l’action (ex. ALERT_ANALYST / risque élevé). Sans SMTP, la décision s’affiche quand même dans l’UI.",
+      "answer_darija": "Email: alerter.py + AISS_SMTP_*. Ila ma kaynch SMTP, décision katban f UI."
+    },
+    {
+      "id": "env-config",
+      "keywords": [
+        "env", ".env", "variable", "configuration", "aiss_", "settings", "policy yaml",
+        "config.py", "default_policy"
+      ],
+      "answer": "Config : .env + backend/aiss/config.py (Settings). Clés ML : AISS_ML_MODEL_DIR, AISS_FEATURE_STORE_PATH, AISS_BASELINES_PATH, AISS_DECISION_LOG_PATH, AISS_DRY_RUN, AISS_POLICY_PATH. Politique YAML : ml, behavioral, deep_learning, thresholds, moo_weights. Agent LLM optionnel : AISS_AGENT_LLM_*.",
+      "answer_darija": "Config f .env + config.py. ML_MODEL_DIR, FEATURE_STORE, BASELINES, DRY_RUN, policy YAML."
+    },
+    {
+      "id": "simulate",
+      "keywords": [
+        "simuler", "simulation", "temps réel", "demo", "démo", "invité", "guest", "demo-live",
+        "jarrab", "نجرب", "سيمولاسيون"
+      ],
+      "answer": "Simulation : UI → POST /api/integration/demo-live (web/integration_check.run_client_live_simulation). Rejoue 3 commandes via le vrai EventProcessor (whoami → cat /etc/shadow → rm -rf…). Affiche scores/actions + email si SMTP. Pas besoin de JumpServer.",
+      "answer_darija": "Simulation: demo-live → 3 sessions 3la EventProcessor 7a9i9i. Bla JumpServer. Email ila SMTP m7ott."
+    },
+    {
+      "id": "analyze",
+      "keywords": [
+        "fichier", "json", "jsonl", "batch", "logs", "analyser", "upload", "replay",
+        "log_analyzer", "mon espace"
+      ],
+      "answer": "Batch : POST /api/analyze/replay (auth) → web/log_analyzer.replay_log_file. Parse JSON/JSONL, passe chaque event dans EventProcessor, renvoie stats + décisions. UI : analyze.html.",
+      "answer_darija": "Batch: /api/analyze/replay → log_analyzer. Kol event kayfuz f EventProcessor."
+    },
+    {
+      "id": "decisions",
+      "keywords": [
+        "décisions", "dashboard", "historique", "decisions.jsonl", "journal",
+        "فين كيبانو", "ديسيزيون"
+      ],
+      "answer": "Journal : AISS_DECISION_LOG_PATH (decisions.jsonl) écrit par ActionExecutor. UI Décisions (app.html/dashboard.js) lit GET /api/decisions (+ détail event). Contient score, action, moteurs, explications.",
+      "answer_darija": "Décisions f decisions.jsonl. UI app.html ← GET /api/decisions."
+    },
+    {
+      "id": "signup",
+      "keywords": [
+        "compte", "inscription", "signup", "login", "connexion", "invité", "auth_store",
+        "نسجل", "حساب"
+      ],
+      "answer": "Auth : web/auth_store.py — signup/login, tokens session, reset password. Pages login.html/signup.html + auth.js. Mode invité = simulation sans compte (demo-live public).",
+      "answer_darija": "Auth f auth_store.py. Invité = simulation bla compte."
+    },
+    {
+      "id": "zero-trust",
+      "keywords": [
+        "zero trust", "zerotrust", "confiance zéro", "continuous",
+        "زيرو تراست", "ثقة صفر"
+      ],
+      "answer": "Zero Trust ici = un login JumpServer ne suffit pas : chaque commande/session est re-évaluée par le pipeline (rules/UEBA/ML) et peut déclencher alerte ou coupure selon la politique — même après accès accordé.",
+      "answer_darija": "Zero Trust: login JumpServer ma kafich — kol commande ttscora o t9der ttalerta/tt9ta3."
+    },
+    {
+      "id": "start",
+      "keywords": [
+        "démarrer", "installer", "docker", "lancer", "commencer", "setup",
+        "compose", "نبدا", "كيفاش نخدم"
+      ],
+      "answer": "Démarrage dev : docker compose up --build — UI http://localhost:8090 (redis + backend + frontend). Local sans Docker : venv backend + deployment/scripts/10-start-web-ui.sh. Health : curl /health.",
+      "answer_darija": "docker compose up --build → localhost:8090. Health: /health."
+    },
+    {
+      "id": "fallback",
+      "keywords": [],
+      "answer": "Je réponds sur le produit ET le code CyberVault (pipeline, EventProcessor, UEBA, ML, train, APIs, frontend). Ex. « Comment marche le pipeline IA ? », « Comment entraîner les modèles ? », « Où est le code UEBA ? ». Pour un LLM général hors corpus, configure AISS_AGENT_LLM_API_KEY.",
+      "answer_darija": "Kanjaweb 3la produit + code (pipeline, ML, UEBA, train, API). Jarrab: « Kifash khddam pipeline IA ? », « Kifash ntraini modèles ? ». LLM 3amm = AISS_AGENT_LLM_API_KEY."
+    }
+  ]
+}

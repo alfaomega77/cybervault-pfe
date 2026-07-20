@@ -41,10 +41,15 @@ services:
       AISS_SMTP_FROM: ${AISS_SMTP_FROM:-}
       AISS_JUMPSERVER_URL: ${AISS_JUMPSERVER_URL:-}
       AISS_JUMPSERVER_TOKEN: ${AISS_JUMPSERVER_TOKEN:-}
+      AISS_AGENT_LLM_URL: ${AISS_AGENT_LLM_URL:-}
+      AISS_AGENT_LLM_API_KEY: ${AISS_AGENT_LLM_API_KEY:-}
+      AISS_AGENT_LLM_MODEL: ${AISS_AGENT_LLM_MODEL:-gpt-4o-mini}
+      AISS_AGENT_LLM_TIMEOUT: ${AISS_AGENT_LLM_TIMEOUT:-45}
       AISS_DECISION_LOG_PATH: /app/data/exports/decisions.jsonl
       AISS_FEATURE_STORE_PATH: /app/data/exports/feature_store.json
       AISS_BASELINES_PATH: /app/data/exports/user_baselines.json
       AISS_USER_CONFIG_PATH: /app/data/exports/user_config.json
+      AISS_BEHAVIOR_RULES_PATH: /app/data/exports/behavior_rules.json
       AISS_USERS_PATH: /app/data/exports/users.json
       AISS_SESSIONS_PATH: /app/data/exports/sessions.json
       AISS_INTEGRATION_STATE_PATH: /app/data/exports/integration_state.json
@@ -56,7 +61,6 @@ services:
       - ./data/models:/app/data/models:ro
     networks:
       - analytics
-      - jms_net
     depends_on:
       redis:
         condition: service_healthy
@@ -88,10 +92,6 @@ services:
 networks:
   analytics:
     driver: bridge
-  # External JumpServer swarm network (Mac lab) — enables AISS_JUMPSERVER_URL=http://core:8080
-  jms_net:
-    external: true
-    name: jms_net
 
 volumes:
   cybervault-data:

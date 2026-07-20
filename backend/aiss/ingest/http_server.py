@@ -30,6 +30,7 @@ from ..web.config_store import (
     save_user_config,
     save_user_preferences,
 )
+from ..notifications.alerter import is_security_alert
 from ..web.integration_check import record_webhook_event, run_all_checks, validate_jumpserver_url
 from ..web.event_detail import get_event_detail
 from ..web.log_analyzer import replay_log_file
@@ -144,13 +145,7 @@ def _clear_decision_history() -> int:
 def _load_decisions(limit: int = 50, alerts_only: bool = False) -> list:
     records = _load_all_decisions()
     if alerts_only:
-        filtered = []
-        for r in records:
-            action = (r.get('decision') or {}).get('action', '')
-            score = (r.get('decision') or {}).get('risk_score', 0) or 0
-            if action not in ('NO_ACTION', 'LOG_ONLY') or score >= 0.35:
-                filtered.append(r)
-        records = filtered
+        records = [r for r in records if is_security_alert(r.get('decision') or {})]
     return list(reversed(records[-limit:]))
 
 
@@ -178,7 +173,6 @@ def _decision_stats(records: list) -> dict:
         if event_id:
             seen_event_ids.add(event_id)
 
-        action = (r.get('decision') or {}).get('action', '')
         score = (r.get('decision') or {}).get('risk_score', 0) or 0
         ts = _parse_ts((r.get('execution') or {}).get('timestamp'))
 
@@ -188,8 +182,7 @@ def _decision_stats(records: list) -> dict:
         if not ts or ts < cutoff:
             continue
 
-        is_alert = action not in ('NO_ACTION', 'LOG_ONLY') or score >= 0.35
-        if is_alert:
+        if is_security_alert(r.get('decision') or {}):
             alerts_24h += 1
         if score >= 0.7:
             high_risk_24h += 1
@@ -215,28 +208,27 @@ def _integration_snippets() -> dict:
     token = settings.webhook_token or '<votre-token-secret>'
     webhook_url = f'{base}/events'
     mac_webhook = webhook_url.replace('localhost', 'host.docker.internal')
-    jumpserver_cfg = f"""# Collez dans config.yml de JumpServer puis : jmsctl.sh restart
-# (Mac Docker : utilisez host.docker.internal au lieu de localhost)
+    jumpserver_cfg = f"""# OPTIONNEL — chemin avancé (webhook). Le mode recommandé est le bridge API :
+# Mon PAM → URL + token → CyberVault synchronise tout seul.
+# (Mac Docker : host.docker.internal au lieu de localhost)
 AI_SECURITY_ENABLED: true
 AI_SECURITY_PUBLISHER: http
 AI_SECURITY_WEBHOOK_URL: {mac_webhook if 'localhost' in base else webhook_url}
 AI_SECURITY_WEBHOOK_TOKEN: {token}"""
-    cybervault_env = f"""# Variables CyberVault (optionnel)
-AISS_PUBLIC_URL={base}
-AISS_DRY_RUN=true
-AISS_JUMPSERVER_URL=https://jumpserver.votre-entreprise.com
-AISS_JUMPSERVER_TOKEN=<token-api>
-AISS_WEBHOOK_TOKEN={token}"""
     return {
         'webhook_url': webhook_url,
         'webhook_url_mac_docker': mac_webhook,
         'jumpserver_config': jumpserver_cfg,
-        'cybervault_env': cybervault_env,
+        'mode': 'api_bridge',
         'instructions_fr': [
-            'Dans JumpServer : éditez config.yml avec le bloc ci-dessous',
-            'Redémarrez JumpServer (jmsctl.sh restart ou docker restart jms_core)',
+            'Dans Mon PAM : renseignez l’URL JumpServer et le token API',
+            'Cliquez « Enregistrer mon PAM » — CyberVault démarre la sync automatiquement',
             'Ouvrez une session SSH dans JumpServer et tapez une commande',
-            'Revenez ici et cliquez « Vérifier la connexion »',
+            'Cliquez « Vérifier le live » pour confirmer la synchronisation',
+        ],
+        'webhook_optional_fr': [
+            'Le webhook config.yml est optionnel (secours).',
+            'Le chemin client recommandé n’exige aucune modification de JumpServer hors token API.',
         ],
     }
 
@@ -305,9 +297,14 @@ class IngestHandler(BaseHTTPRequestHandler):
             })
             return
 
+        if path == '/api/agent/status':
+            from ..web.agent_chat import agent_status
+            _json_response(self, 200, agent_status())
+            return
+
         if path.startswith('/api/') and path != '/api/auth/me':
             admin_paths = {
-                '/api/config', '/api/integration/verify', '/api/integration/snippets',
+                '/api/config',
             }
             if not self._require_api_user('admin' if path in admin_paths else None):
                 return
@@ -334,11 +331,14 @@ class IngestHandler(BaseHTTPRequestHandler):
             return
 
         if path == '/api/status':
+            from ..web.config_store import effective_dry_run, env_forces_dry_run, load_user_config
             cfg = load_user_config()
+            dry = effective_dry_run(cfg)
             _json_response(self, 200, {
                 'service_ok': True,
-                # Env AISS_DRY_RUN is source of truth (same as ActionExecutor).
-                'dry_run': bool(settings.dry_run),
+                'dry_run': dry,
+                'dry_run_env_locked': env_forces_dry_run(),
+                'action_mode': 'test' if dry else 'live',
                 'onboarding_complete': cfg.get('onboarding_complete', False),
                 'integration_complete': cfg.get('integration_complete', False),
                 'pam_live_active': cfg.get('pam_live_active', False),
@@ -350,6 +350,11 @@ class IngestHandler(BaseHTTPRequestHandler):
 
         if path == '/api/config':
             _json_response(self, 200, public_user_config())
+            return
+
+        if path == '/api/behavior-rules':
+            from ..web.behavior_rules_store import list_rules
+            _json_response(self, 200, {'ok': True, 'rules': list_rules()})
             return
 
         if path == '/api/decisions':
@@ -409,11 +414,14 @@ class IngestHandler(BaseHTTPRequestHandler):
             '/api/auth/login',
             '/api/auth/forgot-password',
             '/api/auth/reset-password',
+            '/api/integration/demo-live',
+            '/api/agent/chat',
         }
         if path.startswith('/api/') and path not in public_api_paths:
             admin_paths = {
-                '/api/config', '/api/integration/connect', '/api/integration/stop',
-                '/api/integration/send-test-event', '/api/integration/test-alert',
+                '/api/config',
+                '/api/integration/send-test-event',
+                '/api/integration/test-alert',
                 '/api/decisions/clear',
             }
             if not self._require_api_user('admin' if path in admin_paths else None):
@@ -422,11 +430,46 @@ class IngestHandler(BaseHTTPRequestHandler):
         if path == '/api/config':
             try:
                 body = _read_json_body(self)
+                saved = save_user_preferences(body)
+                _json_response(self, 200, {'ok': True, 'config': public_user_config(saved)})
             except (json.JSONDecodeError, ValueError) as exc:
                 _json_response(self, 400, {'ok': False, 'error': str(exc)})
-                return
-            saved = save_user_preferences(body)
-            _json_response(self, 200, {'ok': True, 'config': public_user_config(saved)})
+            return
+
+        if path == '/api/behavior-rules':
+            from ..web.behavior_rules_store import create_rule, list_rules
+            try:
+                body = _read_json_body(self)
+                rule = create_rule(body if isinstance(body, dict) else {})
+                _json_response(self, 200, {'ok': True, 'rule': rule, 'rules': list_rules()})
+            except (json.JSONDecodeError, ValueError) as exc:
+                _json_response(self, 400, {'ok': False, 'error': str(exc)})
+            return
+
+        if path == '/api/behavior-rules/toggle':
+            from ..web.behavior_rules_store import list_rules, update_rule
+            try:
+                body = _read_json_body(self)
+                rule_id = (body.get('id') or '').strip()
+                if not rule_id:
+                    raise ValueError('id requis')
+                rule = update_rule(rule_id, {'enabled': bool(body.get('enabled', True))})
+                _json_response(self, 200, {'ok': True, 'rule': rule, 'rules': list_rules()})
+            except (json.JSONDecodeError, ValueError) as exc:
+                _json_response(self, 400, {'ok': False, 'error': str(exc)})
+            return
+
+        if path == '/api/behavior-rules/delete':
+            from ..web.behavior_rules_store import delete_rule, list_rules
+            try:
+                body = _read_json_body(self)
+                rule_id = (body.get('id') or '').strip()
+                if not rule_id:
+                    raise ValueError('id requis')
+                delete_rule(rule_id)
+                _json_response(self, 200, {'ok': True, 'rules': list_rules()})
+            except (json.JSONDecodeError, ValueError) as exc:
+                _json_response(self, 400, {'ok': False, 'error': str(exc)})
             return
 
         if path == '/api/auth/signup':
@@ -460,6 +503,18 @@ class IngestHandler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 _record_login_failure(client_ip)
                 _json_response(self, 401, {'ok': False, 'error': str(exc)})
+            return
+
+        if path == '/api/agent/chat':
+            try:
+                body = _read_json_body(self) if self.headers.get('Content-Length') else {}
+            except (json.JSONDecodeError, ValueError, RequestTooLarge) as exc:
+                _json_response(self, 400, {'ok': False, 'error': str(exc)})
+                return
+            from ..web.agent_chat import answer_agent_question
+            result = answer_agent_question((body or {}).get('message', ''))
+            status = 400 if result.get('ok') is False else 200
+            _json_response(self, status, result)
             return
 
         if path == '/api/auth/forgot-password':
@@ -522,6 +577,12 @@ class IngestHandler(BaseHTTPRequestHandler):
             token = (body.get('jumpserver_token') or '').strip()
             if not token:
                 token = load_user_config().get('jumpserver_token', '')
+            if not token:
+                _json_response(self, 400, {
+                    'ok': False,
+                    'error': 'Access key JumpServer requis (format ID:Secret)',
+                })
+                return
             saved = save_user_config({
                 'jumpserver_url': url,
                 'jumpserver_token': token,
@@ -534,18 +595,53 @@ class IngestHandler(BaseHTTPRequestHandler):
                 'monitor_commands': True,
                 'monitor_sessions': True,
             })
+            from .jumpserver_bridge import get_bridge, start_bridge_if_configured, stop_bridge
+            bridge_result = start_bridge_if_configured(lambda event: get_processor().process(event))
+            poll = {'ok': False, 'error': 'bridge_not_started'}
+            if bridge_result.get('ok'):
+                try:
+                    poll = get_bridge().poll_once()
+                except Exception as exc:
+                    poll = {'ok': False, 'error': str(exc)}
+            if not bridge_result.get('ok') or not poll.get('ok'):
+                stop_bridge()
+                saved = save_user_config({
+                    'pam_live_active': False,
+                    'pam_live_stopped_at': datetime.now(timezone.utc).isoformat(),
+                })
+                err = (
+                    poll.get('error')
+                    or bridge_result.get('error')
+                    or 'Impossible de joindre JumpServer'
+                )
+                _json_response(self, 400, {
+                    'ok': False,
+                    'error': (
+                        f'Connexion échouée : {err}. '
+                        'Vérifiez l’URL, l’Access key (ID:Secret) et que JumpServer '
+                        'est joignable depuis CyberVault.'
+                    ),
+                    'config': public_user_config(saved),
+                    'bridge': bridge_result,
+                    'poll': poll,
+                })
+                return
             docker_result = connect_pam_docker()
             test_result = send_live_test_event(get_processor())
             _json_response(self, 200, {
                 'ok': True,
                 'config': public_user_config(saved),
                 'docker': docker_result,
+                'bridge': bridge_result,
+                'poll': poll,
                 'test_event': test_result,
-                'message': 'PAM intégré — ouvrez le tableau de bord Temps réel.',
+                'message': 'JumpServer connecté — synchronisation temps réel active.',
             })
             return
 
         if path == '/api/integration/stop':
+            from .jumpserver_bridge import stop_bridge
+            stop_bridge()
             saved = save_user_config({
                 'pam_live_active': False,
                 'pam_live_stopped_at': datetime.now(timezone.utc).isoformat(),
@@ -568,10 +664,8 @@ class IngestHandler(BaseHTTPRequestHandler):
             return
 
         if path == '/api/integration/demo-live':
+            # Public PoC endpoint: guests may run the 3-session demo without an account.
             user = get_user_by_token(_bearer_token(self))
-            if not user:
-                _json_response(self, 401, {'ok': False, 'error': 'Connectez-vous'})
-                return
             from ..web.integration_check import run_client_live_simulation
             try:
                 body = _read_json_body(self) if self.headers.get('Content-Length') else {}
@@ -580,7 +674,11 @@ class IngestHandler(BaseHTTPRequestHandler):
             try:
                 result = run_client_live_simulation(
                     get_processor(),
-                    alert_email=(body.get('alert_email') or user.get('email') or ''),
+                    alert_email=(
+                        body.get('alert_email')
+                        or (user or {}).get('email')
+                        or ''
+                    ),
                 )
                 _json_response(self, 200, result)
             except Exception as exc:
@@ -702,4 +800,10 @@ def run_http_server(host: str = '0.0.0.0', port: int = 8090):
 def start_http_server_background(host: str = '0.0.0.0', port: int = 8090):
     thread = threading.Thread(target=run_http_server, args=(host, port), daemon=True)
     thread.start()
+    # Resume API bridge if Mon PAM was left active across restarts.
+    try:
+        from .jumpserver_bridge import start_bridge_if_configured
+        start_bridge_if_configured(lambda event: get_processor().process(event))
+    except Exception:
+        logger.exception('Failed to auto-start JumpServer bridge')
     return thread

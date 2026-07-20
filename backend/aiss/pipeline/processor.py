@@ -2,7 +2,7 @@ import logging
 
 from ..actions.executor import ActionExecutor, JumpServerClient
 from ..config import load_policy, settings
-from ..web.config_store import load_user_config
+from ..web.config_store import effective_dry_run, load_user_config
 from .behavioral import BehavioralEngine, combine_assessments
 from .dl_gnn import GNNEngine
 from .dl_sequence import SequenceDLEngine
@@ -24,11 +24,8 @@ def _engine_snapshot(assessment: dict) -> dict:
 
 def _build_executor() -> ActionExecutor:
     cfg = load_user_config()
-    # Safety: AISS_DRY_RUN=true always wins. Real LOCK/KILL only when env is false.
-    if settings.dry_run:
-        dry_run = True
-    else:
-        dry_run = False
+    # Env AISS_DRY_RUN=true always wins; otherwise honour the UI mode toggle.
+    dry_run = effective_dry_run(cfg)
     url = cfg.get('jumpserver_url') or settings.jumpserver_url
     token = cfg.get('jumpserver_token') or settings.jumpserver_token
     return ActionExecutor(

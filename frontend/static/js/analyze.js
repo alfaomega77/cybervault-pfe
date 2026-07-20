@@ -2,6 +2,7 @@
 
 let selectedFile = null;
 let fileContent = null;
+let isGuest = false;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = ['.json', '.jsonl', '.txt'];
 
@@ -15,11 +16,42 @@ function hideAnalyzeError() {
   document.getElementById('analyze-error').classList.remove('visible');
 }
 
+function setNavActive(which) {
+  const espace = document.getElementById('nav-espace');
+  const sim = document.getElementById('nav-simulate');
+  const onSim = which === 'simulate';
+  // Keep both links in the sidebar at all times — only toggle highlight.
+  if (espace) {
+    espace.classList.toggle('active', !onSim);
+    if (onSim) espace.removeAttribute('aria-current');
+    else espace.setAttribute('aria-current', 'page');
+  }
+  if (sim) {
+    sim.hidden = false;
+    sim.style.display = '';
+    sim.classList.toggle('active', onSim);
+    if (onSim) sim.setAttribute('aria-current', 'page');
+    else sim.removeAttribute('aria-current');
+  }
+  const topbar = document.querySelector('.app-topbar strong');
+  if (topbar) topbar.textContent = onSim ? 'Tester' : 'Mon espace';
+}
+
+function syncAnalyzeUrl(mode) {
+  const url = new URL(window.location.href);
+  if (mode === 'simulate') url.searchParams.set('mode', 'simulate');
+  else url.searchParams.delete('mode');
+  if (isGuest) url.searchParams.set('guest', '1');
+  else url.searchParams.delete('guest');
+  history.replaceState(null, '', url.pathname + url.search);
+}
+
 function showStep(name) {
   document.getElementById('view-choice')?.classList.toggle('hidden', name !== 'choice');
   document.getElementById('view-upload')?.classList.toggle('hidden', name !== 'upload');
   document.getElementById('view-simulate')?.classList.toggle('hidden', name !== 'simulate');
   document.getElementById('view-results')?.classList.toggle('hidden', name !== 'results');
+  setNavActive(name === 'simulate' ? 'simulate' : 'espace');
 }
 
 function resetUploadForm() {
@@ -98,73 +130,155 @@ function renderSimulation(data) {
         Risque <strong>${s.risk_pct}%</strong> ·
         Action <strong>${escapeHtml(actionLabelFr(s.action))}</strong> ·
         Exécution <strong>${escapeHtml(s.execution_status)}</strong>
-        ${s.email_sent ? ' · <span style="color:#15803d;">Email envoyé</span>' : ''}
+        ${s.email_sent ? ' · <span style="color:#15803d;">Inclus dans l’email</span>' : ''}
       </p>
     </div>
   `).join('');
 
+  const delivery = data.email_delivery || {};
+  const preview = data.email_preview || null;
   let mailNote = '';
-  if (data.emails_sent > 0) {
-    mailNote = `<p class="auth-success visible" style="display:block;">${data.emails_sent} email(s) d’alerte envoyé(s) à ${escapeHtml(data.alert_email || '—')}.</p>`;
+  if (data.emails_sent > 0 && delivery.ok !== false) {
+    mailNote = `
+      <div class="auth-success visible" style="display:block;margin:0.75rem 0;">
+        Email récapitulatif envoyé à <strong>${escapeHtml(data.alert_email || '—')}</strong>.
+        <br><span style="font-weight:500;">Sujet :</span> ${escapeHtml(preview?.subject || '[CyberVault] Résultat de votre test')}
+        <br><small>Si rien en boîte de réception sous 1–2 min : vérifiez Spam / Quarantaine.</small>
+      </div>`;
+  } else if (data.alert_email && delivery.ok === false) {
+    mailNote = `<p class="auth-error visible" style="display:block;">Échec d’envoi SMTP vers ${escapeHtml(data.alert_email)} : ${escapeHtml(delivery.error || 'erreur inconnue')}. Les décisions restent visibles ci-dessous.</p>`;
   } else if (!data.smtp_configured) {
-    mailNote = `<p style="color:var(--muted);font-size:0.9rem;">SMTP non configuré sur ce serveur — décisions visibles, pas d’email. Sur AWS, renseignez AISS_SMTP_* pour les clients.</p>`;
+    mailNote = `<p style="color:var(--muted);font-size:0.9rem;">SMTP non configuré (AISS_SMTP_*). Décisions visibles ici ; configurez SMTP pour les clients.</p>`;
   } else if (!data.alert_email) {
-    mailNote = `<p style="color:var(--muted);font-size:0.9rem;">Indiquez un email ci-dessus pour recevoir l’alerte de la session à risque.</p>`;
-  } else {
-    mailNote = `<p style="color:var(--muted);font-size:0.9rem;">Aucun email envoyé (seuil d’alerte ou erreur SMTP). Vérifiez Mon PAM → Tester l’alerte.</p>`;
+    mailNote = `<p style="color:var(--muted);font-size:0.9rem;">Indiquez un email ci-dessus pour recevoir le récapitulatif (perso, pro ou universitaire).</p>`;
   }
 
+  let previewBlock = '';
+  if (preview?.text) {
+    previewBlock = `
+      <details open style="margin-top:1rem;border:1px solid var(--border);border-radius:12px;padding:0.85rem 1rem;background:#f8fafc;">
+        <summary style="cursor:pointer;font-weight:700;">Aperçu de l’email envoyé (visible immédiatement)</summary>
+        <pre style="white-space:pre-wrap;font-size:0.85rem;margin:0.75rem 0 0;font-family:var(--font-mono);color:#334155;">${escapeHtml(preview.text)}</pre>
+      </details>`;
+  }
+
+  const decisionsLink = isGuest
+    ? `<a class="btn-green" href="/signup.html?next=%2Fapp.html">Créer un compte pour garder l’historique →</a>`
+    : `<a class="btn-green" href="/app.html">Voir dans Décisions →</a>`;
+
   box.innerHTML = `
-    <p><strong>${escapeHtml(data.message || 'Simulation terminée')}</strong></p>
+    <p><strong>${escapeHtml(data.message || 'Test terminé')}</strong></p>
     ${mailNote}
+    ${previewBlock}
     ${rows}
     <p style="margin-top:0.85rem;font-size:0.85rem;color:var(--muted);">
       Mode dry-run : ${data.dry_run ? 'oui (actions LOCK/KILL simulées, sans couper de vraie session)' : 'non (actions réelles si JumpServer token configuré)'}.
     </p>
   `;
   box.classList.remove('hidden');
-  actions?.classList.remove('hidden');
+  if (actions) {
+    actions.innerHTML = `
+      ${decisionsLink}
+      <button type="button" class="btn-outline" id="btn-sim-again">Relancer</button>
+    `;
+    actions.classList.remove('hidden');
+    document.getElementById('btn-sim-again')?.addEventListener('click', () => {
+      document.getElementById('sim-results')?.classList.add('hidden');
+      actions.classList.add('hidden');
+      document.getElementById('btn-run-simulation')?.click();
+    });
+  }
+}
+
+function applyGuestChrome() {
+  const logout = document.getElementById('btn-logout');
+  if (logout) {
+    logout.textContent = 'Créer un compte';
+    logout.setAttribute('href', '/signup.html?next=%2Fanalyze.html%3Fmode%3Dsimulate');
+    logout.onclick = null;
+  }
+  document.getElementById('guest-banner')?.classList.remove('hidden');
+}
+
+function openSimulateView({ syncUrl = true } = {}) {
+  document.getElementById('sim-error')?.classList.remove('visible');
+  document.getElementById('sim-results')?.classList.add('hidden');
+  document.getElementById('sim-actions')?.classList.add('hidden');
+  showStep('simulate');
+  if (syncUrl) syncAnalyzeUrl('simulate');
+}
+
+function openEspaceView({ syncUrl = true } = {}) {
+  resetUploadForm();
+  showStep('choice');
+  if (syncUrl) syncAnalyzeUrl('espace');
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!Auth.requireAuth('/login.html')) return;
+  const params = new URLSearchParams(window.location.search);
+  const wantSimulate = params.get('mode') === 'simulate';
+  isGuest = params.get('guest') === '1' || sessionStorage.getItem('cybervault_guest') === '1';
 
-  document.getElementById('btn-logout').addEventListener('click', (e) => {
-    e.preventDefault();
-    Auth.logout();
-  });
+  if (Auth.getToken()) {
+    isGuest = false;
+    sessionStorage.removeItem('cybervault_guest');
+  } else if (wantSimulate || isGuest) {
+    isGuest = true;
+    sessionStorage.setItem('cybervault_guest', '1');
+  } else if (!Auth.requireAuth('/login.html')) {
+    return;
+  }
 
-  const me = await Auth.me();
+  if (isGuest) {
+    applyGuestChrome();
+  } else {
+    document.getElementById('btn-logout')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      Auth.logout();
+    });
+  }
+
+  const me = isGuest ? null : await Auth.me();
   if (me?.email) {
     const emailInput = document.getElementById('sim-alert-email');
     if (emailInput && !emailInput.value) emailInput.value = me.email;
   }
 
-  document.getElementById('btn-choose-batch')?.addEventListener('click', () => {
-    resetUploadForm();
-    showStep('upload');
+  // Stay on the same page so the sidebar (and Tester link) never unmounts.
+  document.getElementById('nav-simulate')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openSimulateView();
+  });
+  document.getElementById('nav-espace')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openEspaceView();
   });
 
-  document.getElementById('btn-choose-simulate')?.addEventListener('click', () => {
-    document.getElementById('sim-error')?.classList.remove('visible');
-    document.getElementById('sim-results')?.classList.add('hidden');
-    document.getElementById('sim-actions')?.classList.add('hidden');
-    showStep('simulate');
+  document.getElementById('btn-choose-batch')?.addEventListener('click', () => {
+    if (isGuest) {
+      window.location.href = '/login.html?next=%2Fanalyze.html';
+      return;
+    }
+    resetUploadForm();
+    showStep('upload');
+    syncAnalyzeUrl('espace');
   });
 
   document.getElementById('btn-choose-live')?.addEventListener('click', () => {
-    window.location.href = '/integrate.html';
+    window.location.href = isGuest
+      ? '/login.html?next=%2Fintegrate.html'
+      : '/integrate.html';
   });
 
   document.getElementById('btn-back-choice')?.addEventListener('click', () => {
-    resetUploadForm();
-    showStep('choice');
+    openEspaceView();
   });
 
-  document.getElementById('btn-back-from-sim')?.addEventListener('click', () => showStep('choice'));
+  document.getElementById('btn-back-from-sim')?.addEventListener('click', () => {
+    openEspaceView();
+  });
   document.getElementById('btn-back-home')?.addEventListener('click', () => {
-    resetUploadForm();
-    showStep('choice');
+    openEspaceView();
   });
 
   document.getElementById('btn-run-simulation')?.addEventListener('click', async () => {
@@ -172,7 +286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     err?.classList.remove('visible');
     const btn = document.getElementById('btn-run-simulation');
     btn.disabled = true;
-    btn.textContent = 'Simulation en cours…';
+    btn.textContent = 'Test en cours…';
     try {
       const data = await Auth.api('/api/integration/demo-live', {
         method: 'POST',
@@ -181,7 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }),
       });
       renderSimulation(data);
-      showToast('Simulation live terminée', 'success');
+      showToast('Test temps réel terminé', 'success');
     } catch (e) {
       if (err) {
         err.textContent = e.message;
@@ -189,40 +303,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Lancer la simulation →';
+      btn.textContent = 'Lancer le test →';
     }
-  });
-
-  document.getElementById('btn-sim-again')?.addEventListener('click', () => {
-    document.getElementById('sim-results')?.classList.add('hidden');
-    document.getElementById('sim-actions')?.classList.add('hidden');
-    document.getElementById('btn-run-simulation')?.click();
   });
 
   const dropZone = document.getElementById('drop-zone');
   const fileInput = document.getElementById('file-input');
 
-  document.getElementById('btn-pick-file').addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+  document.getElementById('btn-pick-file')?.addEventListener('click', () => fileInput.click());
+  fileInput?.addEventListener('change', () => handleFile(fileInput.files[0]));
 
-  dropZone.addEventListener('dragover', (e) => {
+  dropZone?.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropZone.classList.add('dragover');
   });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-  dropZone.addEventListener('drop', (e) => {
+  dropZone?.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone?.addEventListener('drop', (e) => {
     e.preventDefault();
     dropZone.classList.remove('dragover');
     handleFile(e.dataTransfer.files[0]);
   });
-  dropZone.addEventListener('keydown', (e) => {
+  dropZone?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       fileInput.click();
     }
   });
 
-  document.getElementById('btn-analyze').addEventListener('click', async () => {
+  document.getElementById('btn-analyze')?.addEventListener('click', async () => {
     if (!fileContent) return;
     hideAnalyzeError();
     const btn = document.getElementById('btn-analyze');
@@ -245,10 +353,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  document.getElementById('btn-analyze-another').addEventListener('click', () => {
+  document.getElementById('btn-analyze-another')?.addEventListener('click', () => {
     resetUploadForm();
     showStep('upload');
   });
 
-  showStep('choice');
+  if (wantSimulate) {
+    openSimulateView();
+  } else {
+    showStep('choice');
+  }
 });

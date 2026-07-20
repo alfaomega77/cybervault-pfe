@@ -4,20 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Connexion — CyberVault</title>
-  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
-  <link rel="stylesheet" href="/static/css/auth.css?v=20260718">
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260719r">
+  <link rel="stylesheet" href="/static/css/auth.css?v=20260719r">
 </head>
 <body class="auth-page">
   <a class="skip-link" href="#login-form">Aller au formulaire</a>
   <div class="auth-split">
-    <aside class="auth-side" aria-hidden="true">
-      <div class="auth-logo">CyberVault</div>
+    <aside class="auth-side">
+      <a class="auth-logo" href="/" aria-label="CyberVault — retour à l’accueil">CyberVault</a>
       <h1>Votre centre de risque PAM</h1>
       <ul class="auth-benefits">
         <li>Décisions IA en temps réel sur les sessions privilégiées</li>
         <li>Scores de risque et explications pour le SOC</li>
         <li>Intégration JumpServer guidée</li>
-        <li>Mode test (dry-run) par défaut</li>
       </ul>
     </aside>
 
@@ -60,7 +59,9 @@
       const fd = new FormData(e.target);
       try {
         await Auth.login(fd.get('email'), fd.get('password'));
-        window.location.href = '/analyze.html';
+        const next = new URLSearchParams(window.location.search).get('next');
+        const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/analyze.html';
+        window.location.href = safeNext;
       } catch (err) {
         showAuthError('login-error', err.message);
         btn.disabled = false;

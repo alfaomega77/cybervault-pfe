@@ -108,7 +108,7 @@ def signup_user(data: dict) -> dict:
         'company': (data.get('company') or '').strip(),
         'cloud_provider': data.get('cloud_provider') or 'aws',
         'query': (data.get('query') or '').strip(),
-        'role': 'admin' if not store['users'] else 'analyst',
+        'role': 'admin',
         'password_hash': _hash_password(password),
         'created_at': _now().isoformat(),
     }

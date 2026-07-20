@@ -262,8 +262,8 @@ async function refresh() {
 
 function startPolling(pamLive) {
   if (pollTimer) clearInterval(pollTimer);
-  // Live PAM: ~1s refresh so Décisions tracks kills without manual F5.
-  const interval = pamLive ? 1000 : 15000;
+  // Live PAM: ~0.5s refresh so Décisions tracks commands quickly.
+  const interval = pamLive ? 500 : 15000;
   pollTimer = setInterval(refresh, interval);
 }
 

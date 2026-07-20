@@ -31,13 +31,23 @@ class ConfigSecurityTests(unittest.TestCase):
         self.assertNotIn('jumpserver_token', public)
         self.assertTrue(public['jumpserver_token_configured'])
 
-    def test_user_preferences_cannot_disable_dry_run(self):
-        saved = config_store.save_user_preferences({
-            'dry_run': False,
-            'alert_email': 'soc@example.com',
-        })
-        self.assertTrue(saved['dry_run'])
-        self.assertEqual(saved['alert_email'], 'soc@example.com')
+    def test_user_preferences_cannot_disable_dry_run_when_env_locked(self):
+        with patch.object(config_store.settings, 'dry_run', True):
+            saved = config_store.save_user_preferences({
+                'dry_run': False,
+                'alert_email': 'soc@example.com',
+            })
+            self.assertTrue(saved['dry_run'])
+            self.assertEqual(saved['alert_email'], 'soc@example.com')
+
+    def test_user_can_toggle_dry_run_when_env_allows_live(self):
+        with patch.object(config_store.settings, 'dry_run', False):
+            live = config_store.save_user_preferences({'dry_run': False})
+            self.assertFalse(live['dry_run'])
+            self.assertFalse(config_store.effective_dry_run(live))
+            safe = config_store.save_user_preferences({'dry_run': True})
+            self.assertTrue(safe['dry_run'])
+            self.assertTrue(config_store.effective_dry_run(safe))
 
 
 class AuthSecurityTests(unittest.TestCase):

@@ -112,21 +112,28 @@ def check_jumpserver_token(url: str, token: str) -> dict:
             'jumpserver_token', 'Token API JumpServer', 'warn',
             'Token non renseigné — OK en mode test (dry-run). Requis pour couper les sessions.',
         )
+    from ..actions.jumpserver_auth import is_access_key, request_auth
+
     base = url.rstrip('/')
-    headers = {
-        'Authorization': f'Token {token}',
-        'Content-Type': 'application/json',
-        'X-JMS-ORG': '00000000-0000-0000-0000-000000000002',
-    }
+    headers, auth = request_auth(token)
+    label = 'Access key JumpServer' if is_access_key(token) else 'Token API JumpServer'
     try:
-        resp = requests.get(f'{base}/api/v1/users/profile/', headers=headers, timeout=10)
+        resp = requests.get(
+            f'{base}/api/v1/users/profile/',
+            headers=headers,
+            auth=auth,
+            timeout=10,
+        )
         if resp.status_code == 200:
-            return _check('jumpserver_token', 'Token API JumpServer', 'ok', 'Token valide — actions kill/lock possibles.')
+            return _check('jumpserver_token', label, 'ok', 'Identifiants valides — actions kill/lock possibles.')
         if resp.status_code == 401:
-            return _check('jumpserver_token', 'Token API JumpServer', 'error', 'Token refusé (401) — régénérez un token service account.')
-        return _check('jumpserver_token', 'Token API JumpServer', 'warn', f'Réponse inattendue HTTP {resp.status_code}.')
+            return _check(
+                'jumpserver_token', label, 'error',
+                'Identifiants refusés (401) — vérifiez Access key (ID:Secret) ou Private Token.',
+            )
+        return _check('jumpserver_token', label, 'warn', f'Réponse inattendue HTTP {resp.status_code}.')
     except requests.RequestException as exc:
-        return _check('jumpserver_token', 'Token API JumpServer', 'error', f'Erreur réseau : {exc}')
+        return _check('jumpserver_token', label, 'error', f'Erreur réseau : {exc}')
 
 
 def run_test_event(processor: EventProcessor) -> dict:
@@ -166,8 +173,8 @@ def check_live_jumpserver_events() -> dict:
             'live_events',
             'Événements JumpServer en direct',
             'pending',
-            'Aucun événement live reçu. Activez le plugin sur JumpServer, ouvrez une session SSH et tapez une commande.',
-            hint='Après config JumpServer, exécutez: whoami puis attendez 10 secondes et relancez la vérification.',
+            'Aucun événement live reçu. Après Intégrer (URL+token), ouvrez une session SSH JumpServer et tapez une commande.',
+            hint='CyberVault synchronise via l’API (pas besoin de config.yml). Attendez ~10 s puis vérifiez.',
         )
     try:
         ts = datetime.fromisoformat(last.replace('Z', '+00:00'))
@@ -198,26 +205,82 @@ def run_all_checks(processor: Optional[EventProcessor] = None) -> dict:
     processor = processor or EventProcessor()
     state = _load_state()
 
+    from ..ingest.jumpserver_bridge import get_bridge
+
+    bridge_status = {}
+    bridge_poll = None
+    try:
+        bridge = get_bridge(lambda event: processor.process(event))
+        bridge_poll = bridge.poll_once()
+        bridge_status = bridge.status()
+    except Exception as exc:
+        bridge_poll = {'ok': False, 'error': str(exc)}
+        try:
+            bridge_status = get_bridge().status()
+        except RuntimeError:
+            bridge_status = {'running': False}
+
+    if bridge_status.get('running') and bridge_status.get('last_poll_ok'):
+        bridge_check = _check(
+            'bridge',
+            'Bridge API JumpServer',
+            'ok',
+            'Sync active — dernier poll OK'
+            + (
+                f" ({bridge_status.get('commands_ingested', 0)} commandes)"
+                if bridge_status.get('commands_ingested')
+                else ''
+            ),
+            last_poll_at=bridge_status.get('last_poll_at'),
+            jumpserver_url=bridge_status.get('jumpserver_url'),
+            commands_ingested=bridge_status.get('commands_ingested'),
+        )
+    elif bridge_poll and bridge_poll.get('ok'):
+        bridge_check = _check(
+            'bridge',
+            'Bridge API JumpServer',
+            'ok',
+            'Poll API réussi — la surveillance continue après Intégrer.',
+            commands_new=bridge_poll.get('commands_new'),
+        )
+    elif not (cfg.get('jumpserver_url') and cfg.get('jumpserver_token')):
+        bridge_check = _check(
+            'bridge',
+            'Bridge API JumpServer',
+            'pending',
+            'Renseignez URL + token API JumpServer — CyberVault synchronise sans config.yml.',
+        )
+    else:
+        err = (bridge_poll or {}).get('error') or bridge_status.get('last_error') or 'poll échoué'
+        bridge_check = _check(
+            'bridge',
+            'Bridge API JumpServer',
+            'error',
+            f'Impossible de synchroniser : {err}',
+            hint='Vérifiez que JumpServer est joignable depuis CyberVault et que le token a les droits sessions/commands.',
+        )
+
     checks = [
         _check('service', 'CyberVault actif', 'ok', 'Service en ligne — endpoint /health OK.'),
         _check(
             'webhook',
-            'Webhook /events prêt',
+            'Webhook /events (optionnel)',
             'ok',
-            f'URL : {settings.public_url.rstrip("/")}/events'
-            + (' (token requis)' if settings.webhook_token else ' (sans token)'),
+            f'Disponible en secours : {settings.public_url.rstrip("/")}/events'
+            + (' (token requis)' if settings.webhook_token else ''),
             webhook_url=f'{settings.public_url.rstrip("/")}/events',
         ),
+        bridge_check,
         run_test_event(processor),
         check_jumpserver_url(cfg.get('jumpserver_url', '')),
         check_jumpserver_token(cfg.get('jumpserver_url', ''), cfg.get('jumpserver_token', '')),
         check_live_jumpserver_events(),
     ]
 
-    statuses = [c['status'] for c in checks]
-    if all(s == 'ok' for s in statuses):
+    critical = [c for c in checks if c['id'] in ('service', 'bridge', 'jumpserver_url', 'pipeline')]
+    if all(c['status'] == 'ok' for c in critical):
         overall = 'ok'
-    elif any(s == 'error' for s in statuses):
+    elif any(c['status'] == 'error' for c in critical):
         overall = 'error'
     else:
         overall = 'partial'
@@ -226,20 +289,18 @@ def run_all_checks(processor: Optional[EventProcessor] = None) -> dict:
         'overall': overall,
         'checks': checks,
         'integration_state': state,
+        'bridge': bridge_status,
         'ready_for_dashboard': overall in ('ok', 'partial'),
+        'live_ready': overall == 'ok',
     }
 
 
 def connect_pam_docker() -> dict:
-    """Report the safe, declarative integration mode.
-
-    The web API must never execute host deployment scripts. JumpServer is
-    configured through its own immutable image or deployment configuration.
-    """
+    """Legacy hook — live sync is handled by the API bridge (no host scripts)."""
     return {
         'ok': True,
         'skipped': True,
-        'message': 'Configuration enregistrée — activez le webhook dans le déploiement JumpServer.',
+        'message': 'Sync live via bridge API — pas de config.yml JumpServer requise.',
     }
 
 
@@ -316,7 +377,6 @@ def run_client_live_simulation(
     ]
 
     sessions = []
-    emails_sent = 0
     for index, scenario in enumerate(scenarios, start=1):
         event_id = f'client-demo-{stamp}-{index}'
         session_id = f'sess-demo-{stamp}-{index}'
@@ -342,9 +402,6 @@ def run_client_live_simulation(
         }
         decision, execution = processor.process(event)
         record_webhook_event(is_test=False, event_id=event_id)
-        notification = execution.get('notification') or {}
-        if notification.get('sent'):
-            emails_sent += 1
         sessions.append({
             'label': scenario['label'],
             'command': scenario['command'],
@@ -356,22 +413,86 @@ def run_client_live_simulation(
             'execution_status': execution.get('status'),
             'execution_detail': execution.get('detail') or '',
             'alert': is_security_alert(decision),
-            'email_sent': bool(notification.get('sent')),
-            'email_detail': (notification.get('email') or {}),
+            'email_sent': False,
+            'email_detail': {},
         })
         if index < len(scenarios):
             time.sleep(0.35)
 
     smtp_configured = bool(os.getenv('AISS_SMTP_HOST', '').strip())
+    email_result = {'ok': False, 'error': 'no_recipient'}
+    email_preview = None
+    emails_sent = 0
+
+    if email:
+        from ..notifications.alerter import send_transactional_email
+        from html import escape as html_escape
+
+        lines = []
+        for s in sessions:
+            lines.append(
+                f"- {s['label']}: `{s['command']}` → risque {s['risk_pct']}% / {s['action']}"
+            )
+        subject = '[CyberVault] Résultat de votre test temps réel'
+        text = (
+            'Bonjour,\n\n'
+            'Voici le résultat de votre test CyberVault (3 sessions privilégiées) :\n\n'
+            + '\n'.join(lines)
+            + '\n\n'
+            'Ouvrez le tableau de bord pour le détail des décisions.\n'
+            f"{os.getenv('AISS_PUBLIC_URL', 'http://localhost:8090').rstrip('/')}/app.html\n\n"
+            '— Équipe CyberVault\n'
+        )
+        rows_html = ''.join(
+            f"<tr><td>{html_escape(s['label'])}</td>"
+            f"<td><code>{html_escape(s['command'])}</code></td>"
+            f"<td>{s['risk_pct']}%</td>"
+            f"<td>{html_escape(str(s['action']))}</td></tr>"
+            for s in sessions
+        )
+        html = f"""<html><body style="font-family:Arial,sans-serif;color:#0f172a;">
+<h2 style="color:#1d4ed8;">Test CyberVault terminé</h2>
+<p>Voici le résumé des 3 sessions analysées par l’IA :</p>
+<table cellpadding="8" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;">
+<thead><tr style="background:#f8fafc;text-align:left;">
+<th>Session</th><th>Commande</th><th>Risque</th><th>Action</th>
+</tr></thead>
+<tbody>{rows_html}</tbody>
+</table>
+<p style="margin-top:1rem;">Vérifiez aussi vos dossiers <strong>Spam / Indésirables</strong> si besoin.</p>
+<p><a href="{html_escape(os.getenv('AISS_PUBLIC_URL', 'http://localhost:8090').rstrip('/'))}/app.html">Ouvrir le tableau de bord</a></p>
+<p style="color:#64748b;font-size:12px;">— CyberVault PAM Risk Intelligence</p>
+</body></html>"""
+        email_result = send_transactional_email(email, subject, text, html)
+        email_preview = {'subject': subject, 'text': text, 'to': email}
+        if email_result.get('ok'):
+            emails_sent = 1
+            for s in sessions:
+                if s.get('alert'):
+                    s['email_sent'] = True
+                    s['email_detail'] = email_result
+
+    from ..web.config_store import effective_dry_run
+
     return {
         'ok': True,
         'sessions': sessions,
         'emails_sent': emails_sent,
         'smtp_configured': smtp_configured,
         'alert_email': email,
-        'dry_run': bool(cfg.get('dry_run', True)),
+        'email_delivery': email_result,
+        'email_preview': email_preview,
+        'dry_run': effective_dry_run(cfg),
         'message': (
-            'Simulation live terminée — 3 sessions analysées. '
-            'Ouvrez Décisions pour le détail.'
+            'Test temps réel terminé — 3 sessions analysées. '
+            + (
+                f'Email récapitulatif envoyé à {email}.'
+                if emails_sent
+                else (
+                    'Aucun email envoyé — vérifiez SMTP / adresse.'
+                    if email
+                    else 'Ajoutez un email pour recevoir le récapitulatif.'
+                )
+            )
         ),
     }

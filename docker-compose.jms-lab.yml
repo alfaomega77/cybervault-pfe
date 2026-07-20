@@ -1,0 +1,18 @@
+name: cybervault
+
+# Optional JumpServer Docker lab network (Mac / local all-in-one).
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.jms-lab.yml up -d
+#
+# Not required for public / client JumpServer over the Internet.
+
+services:
+  backend:
+    networks:
+      - analytics
+      - jms_net
+
+networks:
+  jms_net:
+    external: true
+    name: jms_net

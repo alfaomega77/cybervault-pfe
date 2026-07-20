@@ -43,15 +43,15 @@ function formatTime(iso) {
 }
 
 function riskClass(score) {
-  if (score >= 0.7) return 'status-danger';
-  if (score >= 0.35) return 'status-warn';
+  if (score >= 0.75) return 'status-danger';
+  if (score >= 0.55) return 'status-warn';
   return 'status-ok';
 }
 
 function riskLabel(score) {
   const pct = Math.round((score || 0) * 100);
-  if (pct >= 70) return `Élevé (${pct}%)`;
-  if (pct >= 35) return `Moyen (${pct}%)`;
+  if (pct >= 75) return `Élevé (${pct}%)`;
+  if (pct >= 55) return `Moyen (${pct}%)`;
   return `Faible (${pct}%)`;
 }
 
@@ -244,6 +244,7 @@ function humanizeReason(reason) {
   if (reason.startsWith('unusual_asset:')) return `Serveur inhabituel (${reason.split(':').slice(1).join(':')})`;
   if (reason.startsWith('unusual_account:')) return `Compte inhabituel (${reason.split(':').slice(1).join(':')})`;
   if (reason.startsWith('unusual_ip:')) return `IP inhabituelle (${reason.split(':').slice(1).join(':')})`;
+  if (reason.startsWith('custom_rule:')) return `Règle personnalisée : ${reason.split(':').slice(1).join(':')}`;
   if (reason.startsWith('if_score:')) return `Isolation Forest : ${reason.split(':')[1]}`;
   if (reason.startsWith('rf_score:')) return `Random Forest : ${reason.split(':')[1]}`;
   return reason;
@@ -493,4 +494,67 @@ function exportDecisionsCsv(records, filename = 'cybervault-decisions.csv') {
   link.click();
   URL.revokeObjectURL(link.href);
 }
+
+/** Sidebar Test / Live action mode (dry-run vs real LOCK/KILL). */
+function paintModeSwitch(cfg = {}) {
+  const root = document.getElementById('mode-switch');
+  if (!root) return;
+  const dry = cfg.dry_run !== false;
+  const locked = !!cfg.dry_run_env_locked;
+  const testBtn = document.getElementById('mode-btn-test');
+  const liveBtn = document.getElementById('mode-btn-live');
+  const hint = document.getElementById('mode-switch-hint');
+  testBtn?.classList.toggle('active', dry);
+  liveBtn?.classList.toggle('active', !dry);
+  if (locked) {
+    liveBtn && (liveBtn.disabled = true);
+    if (hint) {
+      hint.textContent = 'Verrouillé par le serveur (AISS_DRY_RUN=true)';
+    }
+  } else {
+    liveBtn && (liveBtn.disabled = false);
+    if (hint) {
+      hint.textContent = dry
+        ? 'Test — décisions sans kill réel'
+        : 'Live — LOCK/KILL réels si JumpServer configuré';
+    }
+  }
+  root.hidden = false;
+}
+
+async function setActionMode(mode) {
+  const wantLive = mode === 'live';
+  if (wantLive) {
+    const ok = await confirmAction(
+      'Passer en mode Live ? CyberVault pourra verrouiller ou couper de vraies sessions JumpServer si le token est configuré.',
+      'Activer Live',
+    );
+    if (!ok) return;
+  }
+  const data = await Auth.api('/api/config', {
+    method: 'POST',
+    body: JSON.stringify({ dry_run: !wantLive }),
+  });
+  paintModeSwitch(data.config || data);
+  if (typeof showToast === 'function') {
+    showToast(wantLive ? 'Mode Live activé' : 'Mode Test (dry-run) activé', wantLive ? 'warn' : 'success');
+  }
+}
+
+async function initModeSwitch() {
+  const root = document.getElementById('mode-switch');
+  if (!root || typeof Auth === 'undefined' || !Auth.getToken()) return;
+  try {
+    const cfg = await Auth.api('/api/config');
+    paintModeSwitch(cfg);
+  } catch {
+    return;
+  }
+  document.getElementById('mode-btn-test')?.addEventListener('click', () => setActionMode('test'));
+  document.getElementById('mode-btn-live')?.addEventListener('click', () => setActionMode('live'));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initModeSwitch();
+});
 

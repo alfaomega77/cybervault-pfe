@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Connectez JumpServer à CyberVault">
   <title>Mon PAM — CyberVault</title>
-  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
-  <link rel="stylesheet" href="/static/css/auth.css?v=20260718">
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260719v">
+  <link rel="stylesheet" href="/static/css/auth.css?v=20260719v">
 </head>
 <body class="integrate-page" data-page="integrate">
   <a class="skip-link" href="#main-content">Aller au contenu</a>
@@ -23,9 +23,17 @@
           <span class="nav-dot" aria-hidden="true"></span>
           Mon espace
         </a>
+        <a href="/analyze.html?mode=simulate">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Tester
+        </a>
         <a href="/integrate.html" class="active" aria-current="page">
           <span class="nav-dot" aria-hidden="true"></span>
           Mon PAM
+        </a>
+        <a href="/comportements.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Comportements
         </a>
         <a href="/app.html">
           <span class="nav-dot" aria-hidden="true"></span>
@@ -39,6 +47,14 @@
             <div style="font-weight:600;color:var(--text);font-size:0.85rem;">Admin</div>
             <div id="user-greeting" style="font-size:0.75rem;color:var(--muted);"></div>
           </div>
+        </div>
+        <div class="mode-switch" id="mode-switch" hidden>
+          <div class="mode-switch-label">Mode</div>
+          <div class="mode-switch-btns" role="group" aria-label="Mode d’action">
+            <button type="button" class="mode-btn active" data-mode="test" id="mode-btn-test">Test</button>
+            <button type="button" class="mode-btn" data-mode="live" id="mode-btn-live">Live</button>
+          </div>
+          <p class="mode-switch-hint" id="mode-switch-hint">Dry-run — pas de kill réel</p>
         </div>
         <a href="#" id="btn-logout" class="btn btn-secondary" style="width:100%;min-height:38px;font-size:0.85rem;">Déconnexion</a>
       </div>
@@ -54,22 +70,24 @@
         <section class="connect-simple card" id="view-main">
           <div class="connect-icon" id="status-icon" aria-hidden="true">CV</div>
           <h1>Mon PAM</h1>
-          <p class="connect-lead" id="status-lead">Connectez JumpServer à CyberVault en un clic.</p>
+          <p class="connect-lead" id="status-lead">
+            Entrez l’URL et l’Access key JumpServer (ID:Secret). CyberVault se connecte automatiquement.
+          </p>
           <p id="status-line" class="hidden" style="font-size:0.9rem;margin:0.5rem 0 1rem;text-align:center;"></p>
+          <div class="auth-error" id="connect-error" role="alert"></div>
 
           <form id="integrate-form" class="connect-form">
-            <details class="connect-optional">
-              <summary>Options JumpServer (optionnel)</summary>
-              <div class="auth-field" style="margin-top:0.75rem;">
-                <label for="jumpserver_url">URL JumpServer</label>
-                <input type="url" id="jumpserver_url" placeholder="http://localhost" value="http://localhost">
-              </div>
-              <div class="auth-field">
-                <label for="jumpserver_token">Token API</label>
-                <input type="password" id="jumpserver_token" placeholder="Pour couper les sessions (production)" autocomplete="off">
-              </div>
-            </details>
-            <button class="connect-btn" type="submit" id="btn-integrate">Intégrer avec mon PAM →</button>
+            <div class="auth-field">
+              <label for="jumpserver_url">URL JumpServer <span style="color:var(--danger)">*</span></label>
+              <input type="url" id="jumpserver_url" placeholder="https://jumpserver.entreprise.com" value="" required>
+              <small class="field-hint">Doit être joignable depuis CyberVault (réseau / VPN).</small>
+            </div>
+            <div class="auth-field">
+              <label for="jumpserver_token">Access key JumpServer <span style="color:var(--danger)">*</span></label>
+              <input type="password" id="jumpserver_token" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:Secret" autocomplete="off" required>
+              <small class="field-hint">JumpServer → Avatar → Personal Settings → Access key → Create. Collez <strong>ID:Secret</strong> (une seule fois affiché).</small>
+            </div>
+            <button class="connect-btn" type="submit" id="btn-integrate">Connecter</button>
           </form>
 
           <div class="setup-step" id="section-alerts">
@@ -105,14 +123,14 @@
         <section class="connect-simple card connect-progress hidden" id="view-progress">
           <div class="connect-spinner" aria-hidden="true"></div>
           <h1>Intégration en cours…</h1>
-          <p class="connect-lead">Configuration du webhook et vérification de la connexion.</p>
+          <p class="connect-lead">Connexion à JumpServer…</p>
         </section>
       </main>
     </div>
   </div>
 
-  <script src="/static/js/auth.js?v=20260718"></script>
-  <script src="/static/js/common.js?v=20260718"></script>
-  <script src="/static/js/integrate.js?v=20260718"></script>
+  <script src="/static/js/auth.js?v=20260719v"></script>
+  <script src="/static/js/common.js?v=20260719v"></script>
+  <script src="/static/js/integrate.js?v=20260719w"></script>
 </body>
 </html>

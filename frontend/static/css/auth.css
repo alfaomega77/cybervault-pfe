@@ -46,6 +46,16 @@
   margin-bottom: 1.75rem;
   position: relative;
   z-index: 1;
+  color: #fff;
+  text-decoration: none;
+  width: fit-content;
+  transition: opacity var(--dur) var(--ease);
+}
+.auth-logo:hover,
+.auth-logo:focus-visible {
+  color: #fff;
+  opacity: 0.88;
+  text-decoration: none;
 }
 .auth-logo::before {
   content: "CV";
@@ -148,10 +158,95 @@
   background: var(--bg);
 }
 
+.integrate-page .app-main-wrap {
+  position: relative;
+  isolation: isolate;
+}
+
+.integrate-page .app-main-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(165deg, rgba(245, 247, 251, 0.88) 0%, rgba(245, 247, 251, 0.72) 42%, rgba(226, 242, 255, 0.78) 100%),
+    radial-gradient(900px 480px at 88% 8%, rgba(37, 99, 235, 0.16), transparent 55%),
+    radial-gradient(700px 420px at 6% 90%, rgba(13, 148, 136, 0.12), transparent 50%),
+    url("/static/img/hero-bg.jpg") center / cover no-repeat;
+}
+
+.integrate-page .app-topbar,
+.integrate-page .app-main {
+  position: relative;
+  z-index: 1;
+}
+
+.integrate-page .app-main {
+  animation: cv-fade-in 0.45s var(--ease) both;
+}
+
+@keyframes cv-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .integrate-page .app-main { animation: none; }
+}
+
 .integrate-page .app-shell .connect-simple {
   width: min(640px, 100%);
   margin: 0 auto;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 18px 40px rgba(15, 23, 42, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
+
+.integrate-page #view-simulate {
+  position: relative;
+  overflow: hidden;
+}
+
+.integrate-page #view-simulate::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #2563eb, #0ea5e9, #14b8a6);
+}
+
+.integrate-page #view-simulate .connect-icon {
+  background: linear-gradient(145deg, rgba(37, 99, 235, 0.14), rgba(20, 184, 166, 0.16));
+  border-color: rgba(37, 99, 235, 0.28);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+}
+
+.integrate-page .choice-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.guest-banner {
+  width: min(640px, 100%);
+  margin: 0 auto 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1e3a8a;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.guest-banner.hidden { display: none; }
+.guest-banner a { font-weight: 650; }
 
 .checkbox-label {
   display: inline-flex;

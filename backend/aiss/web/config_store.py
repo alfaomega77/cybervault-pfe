@@ -80,9 +80,28 @@ def save_user_config(data: dict) -> dict:
         return merged
 
 
+def env_forces_dry_run() -> bool:
+    """Server env AISS_DRY_RUN=true locks the product in safe mode."""
+    return bool(settings.dry_run)
+
+
+def effective_dry_run(config: Optional[dict] = None) -> bool:
+    """True when LOCK/KILL must stay simulated."""
+    if env_forces_dry_run():
+        return True
+    cfg = config or load_user_config()
+    return bool(cfg.get('dry_run', True))
+
+
 def save_user_preferences(data: dict) -> dict:
     """Persist only settings an authenticated user may edit."""
     cleaned = {key: value for key, value in data.items() if key in USER_EDITABLE_KEYS}
+    if 'dry_run' in data:
+        # Users may only disable dry-run when the server env allows live actions.
+        if env_forces_dry_run():
+            cleaned['dry_run'] = True
+        else:
+            cleaned['dry_run'] = bool(data.get('dry_run'))
     if 'alert_email' in cleaned:
         email = str(cleaned['alert_email'] or '').strip().lower()
         if email and (len(email) > 254 or not _EMAIL_RE.fullmatch(email)):
@@ -100,6 +119,9 @@ def public_user_config(config: Optional[dict] = None) -> dict:
     current = config or load_user_config()
     result = {key: current.get(key) for key in PUBLIC_CONFIG_KEYS if key in current}
     result['jumpserver_token_configured'] = bool(current.get('jumpserver_token'))
+    result['dry_run'] = effective_dry_run(current)
+    result['dry_run_env_locked'] = env_forces_dry_run()
+    result['action_mode'] = 'test' if result['dry_run'] else 'live'
     return result
 
 

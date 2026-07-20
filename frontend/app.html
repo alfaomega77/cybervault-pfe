@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Tableau de bord CyberVault — décisions IA sur les accès privilégiés">
   <title>Décisions — CyberVault</title>
-  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
-  <link rel="stylesheet" href="/static/css/app.css?v=20260718">
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260719s">
+  <link rel="stylesheet" href="/static/css/app.css?v=20260719o">
 </head>
 <body data-page="app">
   <a class="skip-link" href="#main-content">Aller au contenu</a>
@@ -23,9 +23,17 @@
           <span class="nav-dot" aria-hidden="true"></span>
           Mon espace
         </a>
+        <a href="/analyze.html?mode=simulate">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Tester
+        </a>
         <a href="/integrate.html">
           <span class="nav-dot" aria-hidden="true"></span>
           Mon PAM
+        </a>
+        <a href="/comportements.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Comportements
         </a>
         <a href="/app.html" class="active" aria-current="page">
           <span class="nav-dot" aria-hidden="true"></span>
@@ -39,6 +47,14 @@
             <div style="font-weight:600;color:var(--text);font-size:0.85rem;">SOC Analyst</div>
             <div id="user-greeting" style="font-size:0.75rem;color:var(--muted);"></div>
           </div>
+        </div>
+        <div class="mode-switch" id="mode-switch" hidden>
+          <div class="mode-switch-label">Mode</div>
+          <div class="mode-switch-btns" role="group" aria-label="Mode d’action">
+            <button type="button" class="mode-btn active" data-mode="test" id="mode-btn-test">Test</button>
+            <button type="button" class="mode-btn" data-mode="live" id="mode-btn-live">Live</button>
+          </div>
+          <p class="mode-switch-hint" id="mode-switch-hint">Dry-run </p>
         </div>
         <a href="#" id="btn-logout" class="btn btn-secondary" style="width:100%;min-height:38px;font-size:0.85rem;">Déconnexion</a>
       </div>
@@ -161,7 +177,7 @@
   </div>
 
   <script src="/static/js/auth.js?v=20260718"></script>
-  <script src="/static/js/common.js?v=20260718"></script>
-  <script src="/static/js/dashboard.js?v=20260718c"></script>
+  <script src="/static/js/common.js?v=20260720risk"></script>
+  <script src="/static/js/dashboard.js?v=20260720fast"></script>
 </body>
 </html>

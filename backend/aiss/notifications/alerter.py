@@ -9,7 +9,7 @@ from html import escape
 from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import parseaddr
+from email.utils import formataddr, formatdate, make_msgid, parseaddr
 from pathlib import Path
 from typing import Optional
 
@@ -24,10 +24,24 @@ DEDUP_PATH = Path(settings.decision_log_path).parent / 'alert_dedup.json'
 OUTBOX_PATH = Path(settings.decision_log_path).parent / 'alert_outbox.jsonl'
 
 
+# Actions that always warrant an analyst email (MOO alert / lock / kill path).
+_ALERT_ACTIONS = frozenset({
+    'ALERT_ANALYST',
+    'CREATE_TICKET',
+    'LOCK_SESSION',
+    'KILL_SESSION',
+})
+# Match policy risk_levels.high — benign LOG_ONLY noise (pwd/ls ~0.4) must not email.
+_HIGH_RISK_SCORE = 0.75
+
+
 def is_security_alert(decision: dict) -> bool:
+    """True only for analyst-facing actions or high risk — not routine LOG_ONLY."""
     action = decision.get('action', '')
+    if action in _ALERT_ACTIONS:
+        return True
     score = float(decision.get('risk_score', 0) or 0)
-    return action not in ('NO_ACTION', 'LOG_ONLY') or score >= 0.35
+    return score >= _HIGH_RISK_SCORE
 
 
 def is_live_event(event: dict) -> bool:
@@ -67,18 +81,35 @@ class AlertNotifier:
             os.chmod(temporary, 0o600)
             os.replace(temporary, DEDUP_PATH)
 
-    def _already_sent(self, event_id: str) -> bool:
-        return bool(event_id and event_id in self._dedup)
-
-    def _mark_sent(self, event_id: str):
-        if event_id:
+    def _claim_notification(self, event_id: str) -> bool:
+        """Return True once per event_id (thread-safe)."""
+        if not event_id:
+            return True
+        with _ALERT_LOCK:
+            if event_id in self._dedup:
+                return False
             self._dedup[event_id] = datetime.now(timezone.utc).isoformat()
-            self._save_dedup()
+            DEDUP_PATH.parent.mkdir(parents=True, exist_ok=True)
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+            self._dedup = {k: v for k, v in self._dedup.items() if v >= cutoff}
+            temporary = DEDUP_PATH.with_suffix(f'{DEDUP_PATH.suffix}.tmp')
+            temporary.write_text(
+                json.dumps(self._dedup, ensure_ascii=False, indent=2),
+                encoding='utf-8',
+            )
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, DEDUP_PATH)
+            return True
 
     def notify_if_needed(self, event: dict, decision: dict, execution: dict) -> dict:
         cfg = load_user_config()
         if not cfg.get('notify_email', True):
             return {'sent': False, 'reason': 'notifications_disabled'}
+
+        metadata = event.get('metadata') or {}
+        # Client live simulation sends one summary email at the end (better deliverability).
+        if metadata.get('demo') == 'client_live_simulation':
+            return {'sent': False, 'reason': 'deferred_demo_summary'}
 
         if not is_live_event(event):
             return {'sent': False, 'reason': 'not_live_event'}
@@ -87,7 +118,8 @@ class AlertNotifier:
             return {'sent': False, 'reason': 'below_alert_threshold'}
 
         event_id = event.get('event_id') or ''
-        if self._already_sent(event_id):
+        # Claim before send so concurrent duplicate events cannot spam email.
+        if not self._claim_notification(event_id):
             return {'sent': False, 'reason': 'already_notified'}
 
         results = {'sent': False, 'email': None}
@@ -101,8 +133,6 @@ class AlertNotifier:
                     results['sent'] = True
 
         self._write_outbox(event, decision, results, body)
-        if results['sent']:
-            self._mark_sent(event_id)
         return results
 
     def _build_message(self, event: dict, decision: dict, execution: dict) -> dict:
@@ -199,13 +229,22 @@ Tableau de bord : {settings.public_url.rstrip('/')}/app.html
 
 
 def send_transactional_email(to_addr: str, subject: str, text: str, html: str) -> dict:
-    host = os.getenv('AISS_SMTP_HOST', '')
-    port = int(os.getenv('AISS_SMTP_PORT', '587'))
-    user = os.getenv('AISS_SMTP_USER', '')
-    password = os.getenv('AISS_SMTP_PASSWORD', '')
-    from_addr = os.getenv('AISS_SMTP_FROM', user or 'cybervault@localhost')
+    def _clean_env(value: str) -> str:
+        return (value or '').strip().strip('"').strip("'").strip()
 
-    parsed_recipient = parseaddr(to_addr)[1]
+    host = _clean_env(os.getenv('AISS_SMTP_HOST', ''))
+    port = int(os.getenv('AISS_SMTP_PORT', '587') or '587')
+    user = _clean_env(os.getenv('AISS_SMTP_USER', ''))
+    password = _clean_env(os.getenv('AISS_SMTP_PASSWORD', ''))
+    from_raw = _clean_env(os.getenv('AISS_SMTP_FROM', '')) or user or 'cybervault@localhost'
+    from_name, from_email = parseaddr(from_raw)
+    if not from_email or '@' not in from_email:
+        from_email = user or 'cybervault@localhost'
+        from_name = from_name or 'CyberVault'
+    if not from_name:
+        from_name = 'CyberVault'
+
+    parsed_recipient = parseaddr(to_addr)[1].strip().lower()
     if not parsed_recipient or '@' not in parsed_recipient or '\n' in to_addr or '\r' in to_addr:
         return {'ok': False, 'error': 'invalid_recipient'}
 
@@ -227,23 +266,30 @@ def send_transactional_email(to_addr: str, subject: str, text: str, html: str) -
         return {'ok': False, 'error': 'smtp_not_configured', 'to': parsed_recipient}
 
     msg = MIMEMultipart('alternative')
-    msg['Subject'] = subject
-    msg['From'] = from_addr
+    msg['Subject'] = subject.replace('\n', ' ').replace('\r', ' ')[:180]
+    msg['From'] = formataddr((from_name, from_email))
     msg['To'] = parsed_recipient
+    msg['Reply-To'] = from_email
+    msg['Date'] = formatdate(localtime=False, usegmt=True)
+    msg['Message-ID'] = make_msgid(domain=from_email.split('@')[-1])
+    msg['MIME-Version'] = '1.0'
+    msg['X-Mailer'] = 'CyberVault'
+    msg['Auto-Submitted'] = 'auto-generated'
     msg.attach(MIMEText(text, 'plain', 'utf-8'))
     msg.attach(MIMEText(html, 'html', 'utf-8'))
 
     try:
-        with smtplib.SMTP(host, port, timeout=15) as server:
+        with smtplib.SMTP(host, port, timeout=20) as server:
             server.ehlo()
             if os.getenv('AISS_SMTP_TLS', 'true').lower() in ('1', 'true', 'yes'):
                 server.starttls()
                 server.ehlo()
             if user and password:
                 server.login(user, password)
-            server.sendmail(from_addr, [parsed_recipient], msg.as_string())
+            # Envelope sender must be a bare address (improves deliverability).
+            server.sendmail(from_email, [parsed_recipient], msg.as_string())
         logger.info('Transactional email sent to %s', parsed_recipient)
-        return {'ok': True, 'to': parsed_recipient}
+        return {'ok': True, 'to': parsed_recipient, 'from': from_email}
     except Exception as exc:
         logger.exception('Failed to send transactional email')
         return {'ok': False, 'error': str(exc), 'to': parsed_recipient}

@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Créer un compte — CyberVault</title>
-  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
-  <link rel="stylesheet" href="/static/css/auth.css?v=20260718">
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260719r">
+  <link rel="stylesheet" href="/static/css/auth.css?v=20260719r">
 </head>
 <body class="auth-page">
   <a class="skip-link" href="#signup-form">Aller au formulaire</a>
   <div class="auth-split">
-    <aside class="auth-side" aria-hidden="true">
-      <div class="auth-logo">CyberVault</div>
+    <aside class="auth-side">
+      <a class="auth-logo" href="/" aria-label="CyberVault — retour à l’accueil">CyberVault</a>
       <h1>Passez votre sécurité PAM au niveau supérieur</h1>
       <ul class="auth-benefits">
         <li>Détection IA en temps réel sur JumpServer</li>
@@ -93,7 +93,9 @@
       const form = Object.fromEntries(new FormData(e.target));
       try {
         await Auth.signup(form);
-        window.location.href = '/analyze.html';
+        const next = new URLSearchParams(window.location.search).get('next');
+        const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/analyze.html';
+        window.location.href = safeNext;
       } catch (err) {
         showAuthError('signup-error', err.message);
         btn.disabled = false;

@@ -91,13 +91,35 @@ cp .env.example .env
 
 ## Running with Docker (recommended)
 
+### Local (this machine only)
+
 ```bash
 docker compose up --build --wait
 ```
 
 Open **http://localhost:8090**
 
-Create the first account (admin). Then explore:
+### Public (anyone on the Internet)
+
+On a cloud VPS with a public IP:
+
+```bash
+bash deployment/scripts/15-deploy-public.sh
+```
+
+With HTTPS (DNS pointing to the server):
+
+```bash
+CYBERVAULT_DOMAIN=app.example.com \
+CADDY_ACME_EMAIL=admin@example.com \
+bash deployment/scripts/15-deploy-public.sh
+```
+
+Users worldwide can sign up, then connect their JumpServer in **Mon PAM** (URL + Access key `ID:Secret`).
+
+Details: [deployment/DEPLOYMENT.md](deployment/DEPLOYMENT.md#public-internet-deployment-anyone-anywhere)
+
+Create an account, then explore:
 
 - **Mon espace** — replay historical JSON/JSONL logs  
 - **Mon PAM** — configure JumpServer + email alerts  

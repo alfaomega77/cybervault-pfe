@@ -3,10 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="CyberVault — analytics IA pour accès privilégiés JumpServer">
+  <meta name="description" content="CyberVault — intelligence de risque IA pour les sessions privilégiées JumpServer">
   <title>CyberVault — PAM Risk Intelligence</title>
-  <link rel="stylesheet" href="/static/css/design-system.css?v=20260718">
-  <link rel="stylesheet" href="/static/css/landing.css?v=20260718">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260719s">
+  <link rel="stylesheet" href="/static/css/landing.css?v=20260719s">
+  <link rel="preload" as="image" href="/static/img/hero-bg.jpg">
 </head>
 <body data-page="landing">
   <a class="skip-link" href="#main-content">Aller au contenu</a>
@@ -14,7 +18,7 @@
   <div class="lv-banner">
     <div class="container">
       <span>PoC open-source · dry-run par défaut · aucune coupure automatique</span>
-      <a href="/signup.html">Commencer →</a>
+      <button type="button" class="lv-banner-cta" id="btn-simuler-temps-reel-banner">Essayer la démo →</button>
     </div>
   </div>
 
@@ -25,9 +29,10 @@
         <span>CyberVault</span>
       </a>
       <nav class="nav-links" aria-label="Navigation principale">
-        <a href="#what">Plateforme</a>
+        <a href="#platform">Plateforme</a>
+        <a href="#capabilities">Capacités</a>
         <a href="#how">Fonctionnement</a>
-        <a href="#benefits">Avantages</a>
+        <a href="#contact">Contact</a>
         <a href="/login.html">Connexion</a>
         <a href="/signup.html" class="nav-cta">Créer un compte</a>
       </nav>
@@ -36,121 +41,179 @@
 
   <main id="main-content">
     <section class="lv-hero">
-      <div class="container lv-hero-grid">
+      <div class="lv-hero-media" aria-hidden="true">
+        <img
+          class="lv-hero-photo"
+          src="/static/img/hero-bg.jpg"
+          alt=""
+          width="1600"
+          height="900"
+          decoding="async"
+          fetchpriority="high"
+        >
+        <div class="lv-hero-scrim"></div>
+        <div class="lv-hero-grid-overlay"></div>
+      </div>
+      <div class="container lv-hero-inner">
+        <p class="lv-kicker">CyberVault</p>
+        <h1>La sécurité des accès admin devient continue.</h1>
+        <p class="lead">
+          Un accès accordé n’est pas un accès sécurisé. CyberVault analyse chaque session
+          privilégiée JumpServer — commandes, comportement, contexte — et décide en temps quasi réel.
+        </p>
+        <div class="lv-hero-actions">
+          <button type="button" class="btn btn-primary btn-lg" id="btn-simuler-temps-reel">
+            Tester en temps réel
+          </button>
+          <a class="btn btn-secondary btn-lg" href="#platform">En savoir plus</a>
+        </div>
+        <p class="lv-hero-note">
+          Intégré avec <strong>JumpServer PAM</strong> · Mode test (dry-run) par défaut
+        </p>
+      </div>
+    </section>
+
+    <section class="lv-trust" aria-label="Preuves clés">
+      <div class="container lv-trust-row">
+        <p class="lv-trust-label">Conçu pour les équipes SOC &amp; PAM</p>
+        <div class="lv-trust-items">
+          <span>JumpServer</span>
+          <span>Règles + UEBA + ML</span>
+          <span>Décisions explicables</span>
+          <span>Alertes email</span>
+          <span>Dry-run sûr</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="platform" class="lv-section">
+      <div class="container lv-split">
         <div>
-          <div class="lv-eyebrow">AI PAM Risk Intelligence</div>
-          <h1>
-            CyberVault
-            <span class="accent">sécurise vos accès admin.</span>
-          </h1>
-          <div class="lv-partner">
-            <span class="lv-partner-label">Intégré avec</span>
-            <span class="lv-partner-badge">JumpServer PAM</span>
-          </div>
-          <p class="lead">
-            Analysez les sessions privilégiées en temps quasi réel — commandes, connexions,
-            comportement admin — et obtenez des décisions explicables : journal, alerte, verrouillage ou coupure.
+          <p class="lv-eyebrow">La plateforme</p>
+          <h2>Stoppez les abus d’accès privilégiés.<br>Pour chaque session admin.</h2>
+          <p class="lv-prose">
+            L’IA élargit la surface de menace — et les comptes admin restent la cible n°1.
+            CyberVault prolonge votre investissement PAM avec un modèle de décision continue :
+            score de risque, explication, alerte ou action — sans remplacer JumpServer.
           </p>
-          <div class="lv-hero-actions">
-            <a class="btn btn-primary btn-lg" href="/signup.html">Essayer le dashboard</a>
-            <a class="btn btn-secondary btn-lg" href="/login.html">Se connecter</a>
+          <div class="lv-stats" role="list">
+            <div class="lv-stat" role="listitem">
+              <strong>&lt; 1 s</strong>
+              <span>latence de décision sur événement live</span>
+            </div>
+            <div class="lv-stat" role="listitem">
+              <strong>3 moteurs</strong>
+              <span>règles déterministes, UEBA, ensemble ML</span>
+            </div>
+            <div class="lv-stat" role="listitem">
+              <strong>0 kill</strong>
+              <span>automatique en dry-run — vous gardez le contrôle</span>
+            </div>
           </div>
+          <a class="lv-text-link" href="#capabilities">Explorer les capacités →</a>
         </div>
-        <aside class="lv-hero-panel" aria-label="Démarrage en 3 étapes">
-          <h3>Opérationnel en 3 étapes</h3>
-          <div class="lv-step">
-            <div class="lv-step-num">1</div>
-            <div>
-              <strong>Lancer la stack</strong>
-              <span><code>docker compose up --build</code></span>
-            </div>
-          </div>
-          <div class="lv-step">
-            <div class="lv-step-num">2</div>
-            <div>
-              <strong>Connecter JumpServer</strong>
-              <span>Ou importer des logs JSON / JSONL.</span>
-            </div>
-          </div>
-          <div class="lv-step">
-            <div class="lv-step-num">3</div>
-            <div>
-              <strong>Surveiller en dry-run</strong>
-              <span>Décisions IA + explications — sans kill auto.</span>
-            </div>
-          </div>
-        </aside>
+        <figure class="lv-visual">
+          <img
+            src="/static/img/platform-dashboard.jpg"
+            alt="Aperçu du tableau de bord CyberVault : scores de risque et décisions live"
+            width="1200"
+            height="900"
+            loading="lazy"
+            decoding="async"
+          >
+        </figure>
       </div>
     </section>
 
-    <section id="what" class="lv-section alt">
+    <section id="how" class="lv-section lv-section-visual">
+      <div class="lv-section-bg" aria-hidden="true">
+        <img src="/static/img/control-plane.jpg" alt="" width="1600" height="900" loading="lazy" decoding="async">
+        <div class="lv-section-scrim"></div>
+      </div>
+      <div class="container">
+        <div class="lv-section-head center">
+          <p class="lv-eyebrow">Contrôle continu</p>
+          <h2>Voir. Comprendre. Décider.</h2>
+          <p>Le plan de contrôle risque pour chaque session privilégiée JumpServer.</p>
+        </div>
+        <ol class="lv-pillars">
+          <li>
+            <span class="lv-pillar-num">01</span>
+            <h3>Voir chaque session</h3>
+            <p>Ingérez commandes, connexions et métadonnées via webhook JumpServer ou replay de logs.</p>
+          </li>
+          <li>
+            <span class="lv-pillar-num">02</span>
+            <h3>Comprendre le risque</h3>
+            <p>Score hybride (règles + comportement + ML) avec raisons lisibles pour le SOC.</p>
+          </li>
+          <li>
+            <span class="lv-pillar-num">03</span>
+            <h3>Contrôler la suite</h3>
+            <p>Journal, alerte email, verrouillage ou coupure — auditables, dry-run par défaut.</p>
+          </li>
+        </ol>
+        <div class="lv-demo-bar">
+          <p>Testez le flux live sans JumpServer — 3 sessions simulées, décisions IA, email si SMTP.</p>
+          <button type="button" class="btn btn-primary" id="btn-simuler-temps-reel-mid">
+            Lancer la démo interactive →
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="capabilities" class="lv-section">
       <div class="container">
         <div class="lv-section-head">
-          <h2>Une couche intelligente au-dessus de votre PAM</h2>
-          <p>Pas un remplacement de JumpServer — un copilote SOC pour les accès privilégiés.</p>
+          <p class="lv-eyebrow">Capacités</p>
+          <h2>Une plateforme. Tous les cas d’usage risque PAM.</h2>
+          <p>Au-delà du contrôle d’accès : détecter si le comportement admin est anormal.</p>
         </div>
-        <div class="lv-cards">
-          <article class="lv-card">
-            <div class="lv-card-icon" aria-hidden="true">RT</div>
+        <div class="lv-cap-grid">
+          <article class="lv-cap">
             <h3>Détection temps réel</h3>
-            <p>Commandes dangereuses, heures inhabituelles, nouveaux serveurs et IP inconnues.</p>
+            <p>Commandes dangereuses, heures inhabituelles, nouveaux assets et IP inconnues.</p>
           </article>
-          <article class="lv-card">
-            <div class="lv-card-icon" aria-hidden="true">AI</div>
+          <article class="lv-cap">
+            <h3>Posture &amp; menace</h3>
+            <p>Priorisez l’exposition réelle avec un score contextualisé, pas un simple seuil fixe.</p>
+          </article>
+          <article class="lv-cap">
             <h3>Intelligence comportementale</h3>
-            <p>Règles + UEBA + ML avec explications compréhensibles pour le SOC.</p>
+            <p>Baselines UEBA par utilisateur — écarts et anomalies explicables pour le SOC.</p>
           </article>
-          <article class="lv-card">
-            <div class="lv-card-icon" aria-hidden="true">MO</div>
-            <h3>Décision multi-objectifs</h3>
-            <p>Équilibre sécurité, disruption opérationnelle et fatigue d’alertes.</p>
+          <article class="lv-cap">
+            <h3>Accès privilégié sécurisé</h3>
+            <p>Autorisez chaque commande et session longtemps après le login — pas seulement à l’entrée.</p>
+          </article>
+          <article class="lv-cap">
+            <h3>Réponse multi-objectifs</h3>
+            <p>Équilibrez sécurité, disruption opérationnelle et fatigue d’alertes avant d’agir.</p>
+          </article>
+          <article class="lv-cap">
+            <h3>Audit &amp; conformité</h3>
+            <p>Journal horodaté des décisions pour Zero Trust, audit PAM et preuve de surveillance.</p>
           </article>
         </div>
       </div>
     </section>
 
-    <section id="how" class="lv-section">
-      <div class="container">
-        <div class="lv-section-head">
-          <h2>Comment ça marche</h2>
-          <p>Un flux clair, auditables de bout en bout.</p>
-        </div>
-        <div class="lv-flow">
-          <strong>Admin</strong> → <strong>JumpServer</strong> → événement →
-          <strong>IA</strong> (Règles + UEBA + ML) → score → décision →
-          action (<strong>Journal</strong> / <strong>Alerte</strong> / <strong>Session</strong>)
-        </div>
+    <section class="lv-section alt" id="proof">
+      <div class="container lv-quote-wrap">
+        <p class="lv-eyebrow">Pour les équipes comme la vôtre</p>
+        <blockquote class="lv-quote">
+          <p>
+            « Ce que nous voulons, ce n’est pas un autre bastion — c’est comprendre en direct
+            si un admin fait quelque chose d’anormal, avec une décision claire et une alerte utile. »
+          </p>
+          <footer>Objectif produit CyberVault · copilote SOC au-dessus de JumpServer</footer>
+        </blockquote>
         <div class="lv-compliance" aria-label="Cas d'usage">
           <span class="lv-badge">Zero Trust</span>
           <span class="lv-badge">Audit PAM</span>
           <span class="lv-badge">SOC</span>
           <span class="lv-badge">Réponse à incident</span>
-        </div>
-      </div>
-    </section>
-
-    <section id="benefits" class="lv-section alt">
-      <div class="container">
-        <div class="lv-section-head">
-          <h2>Pourquoi CyberVault</h2>
-          <p>Au-delà du contrôle d’accès : comprendre si le comportement est anormal.</p>
-        </div>
-        <div class="lv-cards">
-          <article class="lv-card">
-            <div class="lv-card-icon" aria-hidden="true">ZT</div>
-            <h3>Stopper les abus actifs</h3>
-            <p>Détecte l’abus de credentials et les commandes destructrices avant l’impact.</p>
-          </article>
-          <article class="lv-card">
-            <div class="lv-card-icon" aria-hidden="true">SOC</div>
-            <h3>Moins de bruit</h3>
-            <p>Scores contextualisés et raisons lisibles pour prioriser le vrai risque.</p>
-          </article>
-          <article class="lv-card">
-            <div class="lv-card-icon" aria-hidden="true">OK</div>
-            <h3>Preuves d’audit</h3>
-            <p>Journal horodaté des décisions pour démontrer une surveillance continue.</p>
-          </article>
+          <span class="lv-badge">JumpServer</span>
         </div>
       </div>
     </section>
@@ -158,21 +221,83 @@
     <section class="lv-cta">
       <div class="container">
         <h2>Prêt à sécuriser vos accès privilégiés ?</h2>
-        <p>Créez un compte, importez des logs ou connectez JumpServer — en mode test par défaut.</p>
+        <p>Testez une session live, créez un compte, ou connectez JumpServer — en mode test par défaut.</p>
         <div class="lv-cta-actions">
-          <a class="btn btn-primary btn-lg" href="/signup.html">Créer mon compte</a>
-          <a class="btn btn-secondary btn-lg" href="/integrate.html">Voir l’intégration</a>
+          <button type="button" class="btn btn-primary btn-lg" id="btn-simuler-temps-reel-cta">
+            Tester le temps réel
+          </button>
+          <a class="btn btn-secondary btn-lg" href="/signup.html">Créer mon compte</a>
+          <a class="btn btn-secondary btn-lg" href="#contact">Nous contacter</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="lv-section alt" id="contact">
+      <div class="container lv-contact">
+        <p class="lv-eyebrow">Contact</p>
+        <h2>Parlons de votre déploiement PAM</h2>
+        <p class="lv-prose">
+          Une question sur CyberVault, une démo, ou un déploiement JumpServer ?
+          Écrivez-nous — réponse rapide pour les équipes SOC &amp; PAM.
+        </p>
+        <div class="lv-cta-actions">
+          <a class="btn btn-primary btn-lg" href="mailto:o.alfairam@edu.umi.ac.ma?subject=CyberVault%20—%20Contact">
+            Envoyer un email →
+          </a>
         </div>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <div class="container">
-      <div><strong>CyberVault</strong> — PAM Risk Intelligence</div>
-      <div>© 2026 CyberVault</div>
+    <div class="container lv-foot">
+      <div>
+        <div class="brand lv-foot-brand">
+          <div class="brand-badge" aria-hidden="true">CV</div>
+          <span>CyberVault</span>
+        </div>
+        <p>PAM Risk Intelligence — couche IA au-dessus de JumpServer.</p>
+      </div>
+      <div class="lv-foot-links">
+        <a href="#platform">Plateforme</a>
+        <a href="#capabilities">Capacités</a>
+        <a href="#contact">Contact</a>
+        <a href="/integrate.html">Intégration</a>
+        <a href="/login.html">Connexion</a>
+      </div>
+      <div class="lv-foot-copy">© 2026 CyberVault</div>
     </div>
   </footer>
-  <script src="/static/js/common.js?v=20260718"></script>
+
+  <div class="modal hidden" id="sim-auth-modal" role="dialog" aria-modal="true" aria-labelledby="sim-auth-title">
+    <div class="modal-backdrop" data-close-sim-auth></div>
+    <div class="modal-panel lv-sim-auth-panel">
+      <button type="button" class="modal-close" data-close-sim-auth aria-label="Fermer">×</button>
+      <div class="lv-sim-auth-icon" aria-hidden="true">RT</div>
+      <h2 id="sim-auth-title">Tester le temps réel</h2>
+      <p>
+        CyberVault rejoue 3 sessions privilégiées (IA + décisions).
+        Connectez-vous pour garder l’historique, ou continuez en invité.
+      </p>
+      <div class="lv-sim-auth-actions">
+        <a class="btn btn-primary btn-lg" id="sim-auth-signin" href="/login.html?next=%2Fanalyze.html%3Fmode%3Dsimulate">
+          Se connecter
+        </a>
+        <button type="button" class="btn btn-secondary btn-lg" id="sim-auth-guest">
+          Continuer en invité
+        </button>
+      </div>
+      <p class="lv-sim-auth-foot">
+        Pas encore de compte ?
+        <a href="/signup.html?next=%2Fanalyze.html%3Fmode%3Dsimulate">Créer un compte</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="/static/js/auth.js?v=20260719s"></script>
+  <script src="/static/js/common.js?v=20260719s"></script>
+  <script src="/static/js/landing.js?v=20260719s"></script>
+  <link rel="stylesheet" href="/ai-agent/agent.css?v=20260719g">
+  <script src="/ai-agent/agent.js?v=20260719g" defer></script>
 </body>
 </html>

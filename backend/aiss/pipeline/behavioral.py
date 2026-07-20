@@ -205,13 +205,27 @@ class BehavioralEngine:
 
         min_events = int(self.cfg.get('min_events_for_scoring', 5))
         if baseline.event_count < min_events:
-            return {
+            warm = {
                 'risk_score': 0.0,
                 'confidence': 0.3,
                 'reasons': ['baseline_warming_up'],
                 'model': 'behavioral_v1',
                 'baseline_ready': False,
             }
+            try:
+                from ..web.behavior_rules_store import score_custom_rules
+
+                custom = score_custom_rules(
+                    event,
+                    types={'unusual_hours', 'unusual_server', 'unusual_ip'},
+                )
+                if custom.get('reasons'):
+                    warm['reasons'] = ['baseline_warming_up'] + list(custom['reasons'])
+                    warm['risk_score'] = float(custom.get('risk_score') or 0.0)
+                    warm['confidence'] = 0.85
+            except Exception:
+                pass
+            return warm
 
         signals = self.cfg.get('signals', {})
         risk = 0.0
@@ -255,11 +269,28 @@ class BehavioralEngine:
                 risk = max(risk, float(signals.get('lateral_movement', 0.65)))
                 reasons.append('lateral_movement')
 
+        # Explicit user rules (hours / server / IP) always apply when matched
+        try:
+            from ..web.behavior_rules_store import score_custom_rules
+
+            custom = score_custom_rules(
+                event,
+                types={'unusual_hours', 'unusual_server', 'unusual_ip'},
+            )
+            for reason in custom.get('reasons') or []:
+                if reason not in reasons:
+                    reasons.append(reason)
+            risk = max(risk, float(custom.get('risk_score') or 0.0))
+        except Exception:
+            pass
+
         confidence = 0.75 if reasons and reasons != ['baseline_warming_up'] else 0.5
         if 'unusual_asset' in ''.join(reasons) or 'unusual_hour' in ''.join(reasons):
             confidence = 0.82
         if any(r.startswith('unusual_ip:') for r in reasons):
             confidence = max(confidence, 0.80)
+        if any(r.startswith('custom_rule:') for r in reasons):
+            confidence = max(confidence, 0.88)
 
         return {
             'risk_score': min(risk, 1.0),
@@ -326,20 +357,39 @@ class BehavioralEngine:
 
 
 def combine_assessments(*assessments: dict, policy: Optional[dict] = None) -> dict:
+    """Fuse engine scores.
+
+    Convention (EventProcessor): assessments[0] = rules. When rules find nothing
+    destructive, statistical ML/DL scores are dampened so lab context noise
+    (constant ~0.4 IF/RF) does not mark benign commands like ls/pwd as medium.
+    """
+    policy = policy or {}
+    dampen = float((policy.get('ml') or {}).get('no_rule_dampen', 0.15))
+    rules_score = float((assessments[0] or {}).get('risk_score', 0) or 0) if assessments else 0.0
+
     risk = 0.0
     confidence = 0.0
     reasons: List[str] = []
     models: List[str] = []
+    dampened = False
 
     for assessment in assessments:
         if not assessment:
             continue
-        risk = max(risk, float(assessment.get('risk_score', 0)))
-        confidence = max(confidence, float(assessment.get('confidence', 0)))
+        score = float(assessment.get('risk_score', 0) or 0)
+        model = str(assessment.get('model') or '')
+        is_statistical = model.startswith('ml_') or model.startswith('dl_')
+        if is_statistical and rules_score < 0.2 and dampen < 1.0:
+            score *= dampen
+            dampened = dampened or score > 0
+        risk = max(risk, score)
+        confidence = max(confidence, float(assessment.get('confidence', 0) or 0))
         reasons.extend(assessment.get('reasons') or [])
-        model = assessment.get('model')
         if model:
             models.append(model)
+
+    if dampened:
+        reasons.append('ml_dampened_no_rule_hit')
 
     model_label = '+'.join(models) if models else 'unknown'
     if len(models) > 1:
@@ -350,5 +400,5 @@ def combine_assessments(*assessments: dict, policy: Optional[dict] = None) -> di
         'confidence': confidence,
         'reasons': reasons,
         'model': model_label,
-        'risk_level': risk_level_label(min(risk, 1.0), policy or {}),
+        'risk_level': risk_level_label(min(risk, 1.0), policy),
     }

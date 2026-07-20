@@ -10,9 +10,11 @@ import requests
 from ..config import settings
 from ..notifications.alerter import get_notifier
 from ..pipeline.event_context import build_event_context
+from .jumpserver_auth import request_auth
 
 logger = logging.getLogger('aiss.actions')
 _DECISION_LOG_LOCK = threading.Lock()
+_PROCESSED_EVENT_IDS: set = set()
 
 class JumpServerClient:
     def __init__(self, base_url: Optional[str] = None, token: Optional[str] = None):
@@ -23,25 +25,21 @@ class JumpServerClient:
     def enabled(self) -> bool:
         return bool(self.base_url and self.token)
 
-    def _headers(self):
-        return {
-            'Authorization': f'Token {self.token}',
-            'Content-Type': 'application/json',
-            'X-JMS-ORG': '00000000-0000-0000-0000-000000000002',
-        }
+    def _request(self, method: str, url: str, **kwargs) -> requests.Response:
+        headers, auth = request_auth(self.token)
+        kwargs.setdefault('timeout', 10)
+        response = requests.request(method, url, headers=headers, auth=auth, **kwargs)
+        response.raise_for_status()
+        return response
 
     def kill_sessions(self, session_ids: List[str]) -> dict:
         url = f'{self.base_url}/api/v1/terminal/tasks/kill-session/'
-        response = requests.post(url, json=session_ids, headers=self._headers(), timeout=10)
-        response.raise_for_status()
-        return response.json()
+        return self._request('POST', url, json=session_ids).json()
 
     def lock_session(self, session_id: str) -> dict:
         url = f'{self.base_url}/api/v1/terminal/tasks/toggle-lock-session/'
         payload = {'session_id': session_id, 'task_name': 'lock_session'}
-        response = requests.post(url, json=payload, headers=self._headers(), timeout=10)
-        response.raise_for_status()
-        return response.json()
+        return self._request('POST', url, json=payload).json()
 
 
 class ActionExecutor:
@@ -97,8 +95,9 @@ class ActionExecutor:
 
         metadata = event.get('metadata') or {}
         analysis_mode = 'historical' if metadata.get('source') == 'log_replay' else 'live'
+        event_id = event.get('event_id')
         record = {
-            'event_id': event.get('event_id'),
+            'event_id': event_id,
             'session_id': event.get('session_id'),
             'event_type': event.get('event_type'),
             'user_id': event.get('user_id'),
@@ -108,6 +107,13 @@ class ActionExecutor:
             'execution': result,
         }
         with _DECISION_LOG_LOCK:
+            if event_id and event_id in _PROCESSED_EVENT_IDS:
+                result['status'] = 'duplicate'
+                result['detail'] = 'event already recorded'
+                result['notification'] = {'sent': False, 'reason': 'duplicate_event'}
+                return result
+            if event_id:
+                _PROCESSED_EVENT_IDS.add(event_id)
             with self.decision_log.open('a', encoding='utf-8') as fp:
                 fp.write(json.dumps(record, ensure_ascii=False) + '\n')
 

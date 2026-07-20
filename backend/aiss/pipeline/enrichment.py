@@ -111,6 +111,18 @@ class RulesEngine:
             risk = max(risk, 0.70)
             reasons.append('high_acl_risk_level')
 
+        # User-defined abnormal-behavior rules (command / custom regex)
+        try:
+            from ..web.behavior_rules_store import score_custom_rules
+
+            custom = score_custom_rules(event, types={'command', 'custom'})
+            for reason in custom.get('reasons') or []:
+                if reason not in reasons:
+                    reasons.append(reason)
+            risk = max(risk, float(custom.get('risk_score') or 0.0))
+        except Exception:
+            pass
+
         return {
             'risk_score': min(risk, 1.0),
             'confidence': 0.8 if reasons else 0.5,

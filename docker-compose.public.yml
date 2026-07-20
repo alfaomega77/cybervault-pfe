@@ -1,0 +1,38 @@
+name: cybervault
+
+# Public Internet overlay: Caddy on :80 / :443 → frontend.
+# Frontend stays on 127.0.0.1:8090 for local admin access only.
+#
+#   bash deployment/scripts/15-deploy-public.sh
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_started
+    ports:
+      - "${CYBERVAULT_HTTP_PORT:-80}:80"
+      - "${CYBERVAULT_HTTPS_PORT:-443}:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://:80}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-}
+    volumes:
+      - ./deployment/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - cybervault-caddy-data:/data
+      - cybervault-caddy-config:/config
+    networks:
+      - analytics
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://frontend:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  cybervault-caddy-data:
+  cybervault-caddy-config:

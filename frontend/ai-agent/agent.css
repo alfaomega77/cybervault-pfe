@@ -1,0 +1,264 @@
+/* CyberVault AI Agent — floating button + side panel (Sam-style) */
+
+.cv-agent-root {
+  --cv-agent-blue: #2563eb;
+  --cv-agent-teal: #0d9488;
+  --cv-agent-ink: #0b1220;
+  --cv-agent-muted: #5b6b86;
+  --cv-agent-line: rgba(15, 23, 42, 0.1);
+  --cv-agent-w: min(400px, calc(100vw - 1.25rem));
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  z-index: 90;
+}
+
+.cv-agent-fab {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 91;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem 1.05rem 0.75rem 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.92rem;
+  background: linear-gradient(135deg, var(--cv-agent-blue), var(--cv-agent-teal));
+  box-shadow: 0 14px 36px rgba(37, 99, 235, 0.35);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.cv-agent-fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px rgba(37, 99, 235, 0.42);
+}
+.cv-agent-fab:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 3px;
+}
+.cv-agent-fab-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.22);
+  font-weight: 800;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+.cv-agent-fab-label { padding-right: 0.15rem; }
+.cv-agent-fab.is-open { display: none; }
+
+.cv-agent-panel {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 92;
+  width: var(--cv-agent-w);
+  height: min(640px, calc(100vh - 2rem));
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--cv-agent-line);
+  border-radius: 20px;
+  box-shadow: 0 28px 64px rgba(15, 23, 42, 0.2);
+  overflow: hidden;
+  transform-origin: bottom right;
+  animation: cvAgentIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cv-agent-panel[hidden] { display: none !important; }
+
+@keyframes cvAgentIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.cv-agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--cv-agent-line);
+  background: linear-gradient(180deg, #f8fafc, #fff);
+}
+.cv-agent-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+.cv-agent-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.8rem;
+  background: linear-gradient(135deg, var(--cv-agent-blue), var(--cv-agent-teal));
+}
+.cv-agent-identity strong {
+  display: block;
+  color: var(--cv-agent-ink);
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+.cv-agent-identity span {
+  color: var(--cv-agent-muted);
+  font-size: 0.78rem;
+}
+.cv-agent-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--cv-agent-line);
+  background: #fff;
+  color: var(--cv-agent-ink);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.cv-agent-close:hover { background: #f1f5f9; }
+
+.cv-agent-hero {
+  margin: 0;
+  padding: 0.85rem 1rem 0;
+}
+.cv-agent-hero-card {
+  border-radius: 14px;
+  padding: 1rem;
+  color: #fff;
+  background:
+    radial-gradient(420px 160px at 90% 0%, rgba(20, 184, 166, 0.45), transparent 55%),
+    linear-gradient(135deg, #0f172a, #123a6b 55%, #0f766e);
+}
+.cv-agent-hero-card p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.9);
+}
+.cv-agent-hero-card strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 1rem;
+}
+
+.cv-agent-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  background: #f8fafc;
+}
+.cv-agent-msg {
+  max-width: 92%;
+  padding: 0.7rem 0.85rem;
+  border-radius: 14px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.cv-agent-msg.bot {
+  align-self: flex-start;
+  background: #fff;
+  border: 1px solid var(--cv-agent-line);
+  color: var(--cv-agent-ink);
+  border-bottom-left-radius: 4px;
+}
+.cv-agent-msg.user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, var(--cv-agent-blue), var(--cv-agent-teal));
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.cv-agent-msg.typing {
+  color: var(--cv-agent-muted);
+  font-style: italic;
+}
+
+.cv-agent-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0 1rem 0.65rem;
+  background: #f8fafc;
+}
+.cv-agent-chip {
+  border: 1px solid var(--cv-agent-line);
+  background: #fff;
+  color: #1e3a8a;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.cv-agent-chip:hover { background: #eff6ff; }
+
+.cv-agent-composer {
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.75rem 0.85rem 0.85rem;
+  border-top: 1px solid var(--cv-agent-line);
+  background: #fff;
+}
+.cv-agent-composer input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--cv-agent-line);
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  background: #f8fafc;
+}
+.cv-agent-composer input:focus {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  background: #fff;
+}
+.cv-agent-send {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, var(--cv-agent-blue), var(--cv-agent-teal));
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.cv-agent-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.cv-agent-legal {
+  margin: 0;
+  padding: 0 0.85rem 0.7rem;
+  font-size: 0.68rem;
+  color: #94a3b8;
+  background: #fff;
+  line-height: 1.35;
+}
+
+@media (max-width: 520px) {
+  .cv-agent-fab-label { display: none; }
+  .cv-agent-fab { padding: 0.75rem; }
+  .cv-agent-panel {
+    right: 0.5rem;
+    bottom: 0.5rem;
+    width: calc(100vw - 1rem);
+    height: min(88vh, 640px);
+  }
+}

@@ -1,8 +1,20 @@
-/** Mon PAM — intégration en un clic + alertes admin */
+/** Mon PAM — URL + token → connect (succès ou message d’erreur) */
 
 function showView(name) {
   document.getElementById('view-main')?.classList.toggle('hidden', name !== 'main');
   document.getElementById('view-progress')?.classList.toggle('hidden', name !== 'progress');
+}
+
+function showConnectError(msg) {
+  const el = document.getElementById('connect-error');
+  if (!el) return;
+  if (!msg) {
+    el.textContent = '';
+    el.classList.remove('visible');
+    return;
+  }
+  el.textContent = msg;
+  el.classList.add('visible');
 }
 
 function loadAlertSettings(cfg) {
@@ -20,17 +32,15 @@ function setConnectedUI(cfg, message) {
   const stop = document.getElementById('btn-stop-pam');
 
   if (icon) {
-    icon.textContent = '●';
+    icon.textContent = '✓';
     icon.classList.add('ok');
   }
-  if (lead) lead.textContent = 'PAM connecté à CyberVault';
+  if (lead) lead.textContent = 'JumpServer connecté — synchronisation active';
   if (line) {
-    line.textContent = message || `JumpServer : ${cfg.jumpserver_url || 'http://localhost'}`;
+    line.textContent = message || `JumpServer : ${cfg.jumpserver_url || '—'}`;
     line.classList.remove('hidden');
   }
-  if (btn) {
-    btn.textContent = 'Réintégrer mon PAM →';
-  }
+  if (btn) btn.textContent = 'Connecter';
   stop?.classList.remove('hidden');
 }
 
@@ -77,9 +87,15 @@ async function testAlert() {
 }
 
 async function integratePam() {
+  showConnectError('');
   showView('progress');
-  const url = (document.getElementById('jumpserver_url').value || 'http://localhost').trim();
+  const url = (document.getElementById('jumpserver_url').value || '').trim();
   const token = (document.getElementById('jumpserver_token').value || '').trim();
+  if (!url || !token) {
+    showView('main');
+    showConnectError('URL et token JumpServer sont requis.');
+    return;
+  }
 
   try {
     await saveAlerts({ preventDefault: () => {} });
@@ -87,17 +103,13 @@ async function integratePam() {
       method: 'POST',
       body: JSON.stringify({ jumpserver_url: url, jumpserver_token: token }),
     });
-
     showView('main');
     setConnectedUI(r.config, r.message);
-
-    const line = document.getElementById('status-line');
-    if (line && r.docker && !r.docker.ok && !r.docker.skipped) {
-      line.textContent += ' — JumpServer Docker non détecté (mode test CyberVault actif).';
-    }
+    showToast('JumpServer connecté', 'success');
   } catch (err) {
     showView('main');
-    showToast('Erreur : ' + err.message, 'error');
+    showConnectError(err.message || 'Connexion impossible.');
+    showToast(err.message || 'Connexion échouée', 'error');
   }
 }
 
@@ -128,7 +140,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('jumpserver_url').value = cfg.jumpserver_url;
     }
     if (cfg.jumpserver_token_configured) {
-      document.getElementById('jumpserver_token').placeholder = 'Token déjà configuré — laisser vide pour le conserver';
+      const tokenInput = document.getElementById('jumpserver_token');
+      tokenInput.required = false;
+      tokenInput.placeholder = 'Token déjà enregistré — laisser vide pour le conserver';
     }
     loadAlertSettings(cfg);
 

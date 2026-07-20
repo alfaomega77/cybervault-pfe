@@ -92,6 +92,9 @@ ml:
   enabled: true
   supervised_enabled: true
   blend_weight_rf: 0.6
+  # When rules find no destructive pattern, multiply ML/DL risk by this factor
+  # so context-only anomaly (~0.4) does not inflate benign commands (ls/pwd).
+  no_rule_dampen: 0.15
   isolation_forest:
     n_estimators: 200
     contamination: 0.08

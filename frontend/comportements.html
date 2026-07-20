@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Définir des comportements anormaux CyberVault">
+  <title>Comportements — CyberVault</title>
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20260720a">
+  <link rel="stylesheet" href="/static/css/auth.css?v=20260720a">
+  <style>
+    .rules-layout { display: grid; gap: 1.25rem; max-width: 720px; margin: 0 auto; }
+    .rule-card {
+      border: 1px solid var(--border, #e5e7eb);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      background: var(--surface, #fff);
+    }
+    .rule-card.disabled { opacity: 0.55; }
+    .rule-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+    .rule-title { font-weight: 600; margin: 0 0 0.25rem; color: var(--text); }
+    .rule-meta { font-size: 0.82rem; color: var(--muted); margin: 0; }
+    .rule-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+    .rule-actions button { font-size: 0.8rem; min-height: 34px; padding: 0 0.7rem; }
+    .type-badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3730a3;
+      margin-bottom: 0.35rem;
+    }
+    #rules-empty { text-align: center; color: var(--muted); padding: 1.5rem; }
+    .form-hint { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+    #rule-status { font-size: 0.85rem; color: var(--muted); min-height: 1.2em; }
+  </style>
+</head>
+<body class="integrate-page" data-page="comportements">
+  <a class="skip-link" href="#main-content">Aller au contenu</a>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
+  <div class="app-shell">
+    <aside class="app-sidebar" id="app-sidebar" aria-label="Navigation">
+      <a class="brand" href="/">
+        <div class="brand-badge" aria-hidden="true">CV</div>
+        <span>CyberVault</span>
+      </a>
+      <nav class="side-nav">
+        <a href="/analyze.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Mon espace
+        </a>
+        <a href="/analyze.html?mode=simulate">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Tester
+        </a>
+        <a href="/integrate.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Mon PAM
+        </a>
+        <a href="/comportements.html" class="active" aria-current="page">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Comportements
+        </a>
+        <a href="/app.html">
+          <span class="nav-dot" aria-hidden="true"></span>
+          Décisions
+        </a>
+      </nav>
+      <div class="side-footer">
+        <div class="user-chip">
+          <div class="avatar" aria-hidden="true">AD</div>
+          <div>
+            <div style="font-weight:600;color:var(--text);font-size:0.85rem;">Admin</div>
+            <div id="user-greeting" style="font-size:0.75rem;color:var(--muted);"></div>
+          </div>
+        </div>
+        <div class="mode-switch" id="mode-switch" hidden>
+          <div class="mode-switch-label">Mode</div>
+          <div class="mode-switch-btns" role="group" aria-label="Mode d’action">
+            <button type="button" class="mode-btn active" data-mode="test" id="mode-btn-test">Test</button>
+            <button type="button" class="mode-btn" data-mode="live" id="mode-btn-live">Live</button>
+          </div>
+          <p class="mode-switch-hint" id="mode-switch-hint">Dry-run — pas de kill réel</p>
+        </div>
+        <a href="#" id="btn-logout" class="btn btn-secondary" style="width:100%;min-height:38px;font-size:0.85rem;">Déconnexion</a>
+      </div>
+    </aside>
+
+    <div class="app-main-wrap">
+      <div class="app-topbar">
+        <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Ouvrir le menu" aria-controls="app-sidebar" aria-expanded="false">☰</button>
+        <strong>Comportements</strong>
+      </div>
+
+      <main class="app-main" id="main-content">
+        <div class="rules-layout">
+          <section class="card connect-simple" style="text-align:left;">
+            <h1 style="margin-bottom:0.35rem;">Comportements anormaux</h1>
+            <p class="connect-lead" style="text-align:left;margin:0 0 1rem;">
+              Définissez ce qui doit être signalé : commande dangereuse, heures hors plage, serveur sensible, IP suspecte…
+            </p>
+
+            <form id="rule-form" class="connect-form">
+              <div class="auth-field">
+                <label for="rule_name">Nom <span style="color:var(--danger)">*</span></label>
+                <input type="text" id="rule_name" placeholder="ex. Accès lab-db la nuit" required maxlength="120">
+              </div>
+              <div class="auth-field">
+                <label for="rule_type">Type <span style="color:var(--danger)">*</span></label>
+                <select id="rule_type" required>
+                  <option value="command">Commande (regex / motif)</option>
+                  <option value="unusual_hours">Heures inhabituelles</option>
+                  <option value="unusual_server">Serveur / asset</option>
+                  <option value="unusual_ip">Adresse IP</option>
+                  <option value="custom">Personnalisé (regex sur commande)</option>
+                </select>
+              </div>
+              <div class="auth-field">
+                <label for="rule_pattern" id="rule_pattern_label">Motif / valeur <span style="color:var(--danger)">*</span></label>
+                <input type="text" id="rule_pattern" placeholder="ex. rm\s+-rf" required maxlength="500">
+                <p class="form-hint" id="rule_pattern_hint">Regex ou texte dans la commande (ex. wget|curl|chmod\s+777)</p>
+              </div>
+              <div class="auth-field">
+                <label for="rule_risk">Score de risque (0–1)</label>
+                <input type="number" id="rule_risk" min="0" max="1" step="0.05" value="0.85">
+              </div>
+              <div class="auth-field">
+                <label for="rule_desc">Description (optionnel)</label>
+                <input type="text" id="rule_desc" placeholder="Pourquoi cette règle ?" maxlength="500">
+              </div>
+              <button class="connect-btn" type="submit" id="btn-save-rule">Ajouter la règle</button>
+              <p id="rule-status" aria-live="polite"></p>
+            </form>
+          </section>
+
+          <section>
+            <h2 style="font-size:1rem;margin:0 0 0.75rem;">Règles actives</h2>
+            <div id="rules-list"></div>
+            <p id="rules-empty" class="hidden">Aucune règle pour l’instant — ajoutez-en une ci-dessus.</p>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/js/auth.js?v=20260720a"></script>
+  <script src="/static/js/common.js?v=20260720a"></script>
+  <script src="/static/js/comportements.js?v=20260720a"></script>
+</body>
+</html>

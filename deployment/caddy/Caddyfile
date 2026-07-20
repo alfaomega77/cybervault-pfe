@@ -1,0 +1,17 @@
+# CyberVault public edge proxy
+# SITE_ADDRESS examples:
+#   http://:80          → HTTP on all interfaces (IP / any host)
+#   app.example.com     → HTTPS via Let's Encrypt (DNS + ports 80/443)
+
+{$SITE_ADDRESS} {
+	encode gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	reverse_proxy frontend:8080
+}

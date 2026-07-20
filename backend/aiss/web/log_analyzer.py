@@ -101,8 +101,8 @@ def replay_log_file(body: dict, processor: Optional[EventProcessor] = None) -> d
 
         decision, execution = processor.process(event)
         score = decision.get('risk_score', 0) or 0
-        action = decision.get('action', '')
-        if action not in ('NO_ACTION', 'LOG_ONLY') or score >= 0.35:
+        from ..notifications.alerter import is_security_alert
+        if is_security_alert(decision):
             alerts += 1
         if score >= 0.7:
             high_risk += 1
